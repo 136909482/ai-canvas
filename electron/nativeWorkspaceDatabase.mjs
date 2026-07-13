@@ -102,7 +102,7 @@ function readSchemaVersion(database) {
 
 function openDatabase(workspacePath) {
   const database = new DatabaseSync(getDatabasePath(workspacePath))
-  database.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;')
+  database.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 100;')
   return database
 }
 
@@ -350,15 +350,19 @@ export async function initializeWorkspaceDatabase(workspacePath) {
     await copyFile(databasePath, backupPath)
   }
 
-  const database = openDatabase(workspacePath)
-  try {
-    database.exec(DATABASE_SCHEMA)
-    for (const row of database.prepare('SELECT project_json FROM projects').all()) {
-      rebuildProjectSearchDocuments(database, JSON.parse(row.project_json))
+  if (!existed || previousVersion < WORKSPACE_DATABASE_SCHEMA_VERSION) {
+    const database = openDatabase(workspacePath)
+    try {
+      withTransaction(database, () => {
+        database.exec(DATABASE_SCHEMA)
+        for (const row of database.prepare('SELECT project_json FROM projects').all()) {
+          rebuildProjectSearchDocuments(database, JSON.parse(row.project_json))
+        }
+        database.exec(`PRAGMA user_version = ${WORKSPACE_DATABASE_SCHEMA_VERSION}`)
+      })
+    } finally {
+      database.close()
     }
-    database.exec(`PRAGMA user_version = ${WORKSPACE_DATABASE_SCHEMA_VERSION}`)
-  } finally {
-    database.close()
   }
   return { created: !existed, previousVersion, version: WORKSPACE_DATABASE_SCHEMA_VERSION, backupPath, databasePath }
 }

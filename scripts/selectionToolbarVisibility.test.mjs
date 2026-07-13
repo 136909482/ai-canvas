@@ -26,6 +26,14 @@ if (
 }
 
 if (
+  !selectionToolbarSource.includes("import { NodeToolbar, Position } from '@xyflow/react'")
+  || !selectionToolbarSource.includes('nodeId={toolbarNodeIds}')
+  || selectionToolbarSource.includes('bounds.x * zoom + x')
+) {
+  throw new Error('Selection toolbar should use React Flow node bounds instead of manually projected store coordinates')
+}
+
+if (
   !selectionToolbarSource.includes('{isSingleGroupSelection ? (')
   || !selectionToolbarSource.includes('testId="save-selection-as-template"')
 ) {

@@ -1,7 +1,6 @@
 import { computeAutoLayout, computeFocusedAutoLayout, type LayoutDirection } from '@/utils/autoLayout'
 import { create } from 'zustand'
 import {
-  applyNodeChanges,
   applyEdgeChanges,
   addEdge,
   type Node,
@@ -60,10 +59,10 @@ import {
   DEFAULT_VIDEO_NODE_HEIGHT,
   DEFAULT_VIDEO_NODE_WIDTH,
   applyGroupAwareLayoutPositions,
+  applyVisualNodeChanges,
   buildGroupAwareLayoutTargets,
   findManualSpawnPosition,
   getAbsoluteNodePosition,
-  moveVisualGroupMembers,
   normalizeVisualGroupNodes,
 } from './canvasLayoutGeometry'
 import {
@@ -299,8 +298,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   onNodesChange: (changes) =>
     set((s) => {
-      let nextNodes = applyNodeChanges(changes, s.nodes)
-      nextNodes = moveVisualGroupMembers(s.nodes, nextNodes, changes)
+      const nextNodes = applyVisualNodeChanges(s.nodes, changes)
       const isDragging = changes.some((change) => (
         'id' in change && change.type === 'position' && change.dragging === true
       ))
@@ -1050,8 +1048,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         position,
         dragging: false,
       }))
-      let nextNodes = applyNodeChanges(changes, s.nodes)
-      nextNodes = moveVisualGroupMembers(s.nodes, nextNodes, changes)
+      const nextNodes = applyVisualNodeChanges(s.nodes, changes)
 
       return {
         nodes: applySettledPositionSideEffects(nextNodes, changes),

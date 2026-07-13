@@ -152,6 +152,21 @@ function makeImageNode(id, position, index, selected = false) {
   }
 }
 
+function makeGroupNode(id, position, width, height, selected = false) {
+  return {
+    id,
+    type: 'groupNode',
+    position,
+    width,
+    height,
+    selected,
+    data: {
+      label: 'Drag Validation Group',
+      color: 'violet',
+    },
+  }
+}
+
 function makeWorkspace(nodes) {
   const now = Date.now()
   const snapshot = {
@@ -351,6 +366,61 @@ async function dragNode(page, nodeId, { dx = 180, dy = 24, steps = 36 } = {}) {
   await page.waitForTimeout(180)
 }
 
+async function dragGroupWhileHeld(page, groupId, memberId, { dx = 180, dy = 40, steps = 24 } = {}) {
+  const group = page.locator(`[data-testid="node-${groupId}"]`)
+  await group.waitFor({ state: 'visible', timeout: 15_000 })
+  const groupBefore = await group.boundingBox()
+  const memberBefore = await getNodeRect(page, memberId)
+  assert(groupBefore && memberBefore, 'Expected group and member bounds before drag')
+
+  const startX = groupBefore.x + groupBefore.width - 28
+  const startY = groupBefore.y + groupBefore.height - 28
+  await page.mouse.move(startX, startY)
+  await page.mouse.down()
+
+  for (let step = 1; step <= steps; step += 1) {
+    const progress = step / steps
+    await page.mouse.move(startX + dx * progress, startY + dy * progress)
+    await page.waitForTimeout(6)
+  }
+
+  await page.evaluate(() => new Promise((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))
+  }))
+
+  const groupWhileHeld = await getNodeRect(page, groupId)
+  const memberWhileHeld = await getNodeRect(page, memberId)
+  const toolbarWhileHeld = await page.getByRole('toolbar', { name: '所选节点操作' }).boundingBox()
+  const groupHeldDelta = getMovedDelta(groupBefore, groupWhileHeld)
+  const memberHeldDelta = getMovedDelta(memberBefore, memberWhileHeld)
+
+  assert(groupWhileHeld && toolbarWhileHeld, 'Expected group toolbar bounds while pointer is held')
+  assert(groupHeldDelta.x > 100, `Group should move before pointer release, got dx=${groupHeldDelta.x}`)
+  assert(memberHeldDelta.x > 100, `Group member should move before pointer release, got dx=${memberHeldDelta.x}`)
+  assert(Math.abs(groupHeldDelta.x - memberHeldDelta.x) <= 2, 'Group member should match group horizontal movement while held')
+  assert(Math.abs(groupHeldDelta.y - memberHeldDelta.y) <= 2, 'Group member should match group vertical movement while held')
+  assert(
+    Math.abs(toolbarWhileHeld.x + toolbarWhileHeld.width / 2 - (groupWhileHeld.x + groupWhileHeld.width / 2)) <= 2,
+    'Group toolbar should stay horizontally centered above the group while held',
+  )
+  assert(
+    Math.abs(groupWhileHeld.y - (toolbarWhileHeld.y + toolbarWhileHeld.height) - 18) <= 2,
+    'Group toolbar should stay attached above the group while held',
+  )
+
+  await page.mouse.up()
+  await page.waitForTimeout(220)
+
+  const groupAfter = await getNodeRect(page, groupId)
+  const memberAfter = await getNodeRect(page, memberId)
+  const groupAfterDelta = getMovedDelta(groupBefore, groupAfter)
+  const memberAfterDelta = getMovedDelta(memberBefore, memberAfter)
+  assert(Math.abs(groupAfterDelta.x - memberAfterDelta.x) <= 2, 'Group member should stay aligned after drag stop')
+  assert(Math.abs(groupAfterDelta.y - memberAfterDelta.y) <= 2, 'Group member should stay aligned after drag stop')
+
+  return { groupHeldDelta, memberHeldDelta, groupAfterDelta, memberAfterDelta }
+}
+
 function getMovedDelta(before, after) {
   assert(before && after, 'Expected node bounds before and after drag')
   return {
@@ -414,6 +484,21 @@ async function runDefaultVisibleDragScenario(context, baseUrl) {
   assert((counts.ImageNode ?? 0) <= 30, `Default visible drag should keep ImageNode internals stable while the wrapper moves, got ${counts.ImageNode ?? 0}`)
 
   return { counts }
+}
+
+async function runVisualGroupDragScenario(context, baseUrl) {
+  const page = await openSeededPage(context, baseUrl, {
+    performanceMode: true,
+    nodes: [
+      makeGroupNode('group-1', { x: 80, y: 80 }, 760, 520, true),
+      makeImageNode('group-member', { x: 150, y: 150 }, 1),
+      makeImageNode('outside-node', { x: 920, y: 150 }, 2),
+    ],
+  })
+
+  const result = await dragGroupWhileHeld(page, 'group-1', 'group-member')
+  await page.close()
+  return result
 }
 
 async function runMultiSelectScenario(context, baseUrl) {
@@ -548,6 +633,7 @@ async function main() {
     const results = {
       internalDragDiagnostic: await runInternalDragScenario(context, baseUrl),
       defaultVisibleDrag: await runDefaultVisibleDragScenario(context, baseUrl),
+      visualGroupDrag: await runVisualGroupDragScenario(context, baseUrl),
       multiSelect: await runMultiSelectScenario(context, baseUrl),
       qualityFallback: await runQualityFallbackScenario(context, baseUrl),
       undoRedoAndDirty: await runUndoRedoAndDirtyScenario(context, baseUrl),
@@ -561,6 +647,7 @@ async function main() {
     console.log(`  report: ${reportPath}`)
     console.log(`  internal drag diagnostic renders: ${JSON.stringify(results.internalDragDiagnostic.counts)}`)
     console.log(`  default visible drag renders: ${JSON.stringify(results.defaultVisibleDrag.counts)}`)
+    console.log(`  visual group drag deltas: ${JSON.stringify(results.visualGroupDrag)}`)
     console.log(`  multi-select deltas: ${JSON.stringify({
       primary: results.multiSelect.primaryDelta,
       secondary: results.multiSelect.secondaryDelta,

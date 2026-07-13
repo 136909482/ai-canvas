@@ -60,7 +60,7 @@ interface ProjectStore {
   resolveActiveProjectAssetUrls: () => Promise<void>
   persistWorkspaceFile: () => Promise<SaveProjectResult>
   saveActiveProject: () => Promise<SaveProjectResult>
-  createProject: (name?: string) => Promise<string>
+  createProject: (name?: string) => Promise<string | null>
   duplicateProject: (projectId: string) => Promise<string | null>
   loadProject: (projectId: string) => Promise<boolean>
   renameProject: (projectId: string, name?: string) => Promise<boolean>
@@ -449,6 +449,10 @@ export const useProjectStore = create<ProjectStore>()((set, get) => {
   },
 
   createProject: async (name) => {
+    if (!isStorageConfigured()) {
+      return null
+    }
+
     get().syncActiveWorkingSnapshot()
 
     const project = createProjectRecord(name)

@@ -4,7 +4,7 @@ import { analyzeHistorySize } from '@/features/history/historyDiagnostics'
 import { summarizeWorkspaceAssetReferences } from '@/features/projectManager/assetInventory'
 import { cloneProjectSnapshot, takeWorkspaceSnapshot } from '@/features/projectManager/runtime'
 import { analyzeProjectSnapshotSize, formatSnapshotByteSize } from '@/features/projectManager/snapshotSize'
-import { platformBridge } from '@/platform'
+import { platformBridge, platformRuntime } from '@/platform'
 import { useFeedbackStore } from '@/store/useFeedbackStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
 import { useProjectStore } from '@/store/useProjectStore'
@@ -385,7 +385,7 @@ export function StorageSettingsPanel({ active = true }: { active?: boolean }) {
               <div className={`mt-1 text-xs leading-5 ${themeClasses.textMuted}`}>
                 {isChecking ? '正在检查目录状态...' : statusMessage || '选择一个本地目录作为项目工作区。'}
               </div>
-              {runtime.workspaceConfigured ? (
+              {runtime.workspaceConfigured && platformRuntime === 'web' ? (
                 <div className={`mt-0.5 text-[11px] leading-4 ${themeClasses.textMuted}`}>
                   浏览器模式仅能读取授权目录名；接入桌面目录桥后会显示完整路径。
                 </div>

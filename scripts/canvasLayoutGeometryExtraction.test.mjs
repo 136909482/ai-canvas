@@ -14,6 +14,7 @@ const requiredExports = [
   'applyGroupAwareLayoutPositions',
   'normalizeVisualGroupNodes',
   'moveVisualGroupMembers',
+  'applyVisualNodeChanges',
   'getDescendantNodeIds',
   'findManualSpawnPosition',
 ]

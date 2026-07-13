@@ -74,11 +74,12 @@ Electron 持久化由 `electron/nativeWorkspace.mjs` 和 `electron/nativeWorkspa
 
 ### 桌面保存响应性
 
-Electron 主进程负责窗口、IPC 路由和生命周期，不得在其中直接执行 `node:sqlite` 的 `DatabaseSync` 打开、事务、索引更新或全量快照序列化。项目保存必须进入独立的持久化 Worker / 子进程，主进程只转发请求并异步回传结果；否则 SQLite 锁等待、慢盘写入、Defender 扫描或大快照提交会阻塞窗口事件循环并表现为“未响应”。
+Electron 主进程只负责窗口、IPC 路由和生命周期。SQLite 请求经 `electron/nativeWorkspaceDatabaseClient.mjs` 转发到 `electron/nativeWorkspaceDatabaseWorker.mjs`，`node:sqlite` 的 `DatabaseSync` 打开、事务、索引更新和项目 JSON 序列化都不在主进程事件循环执行。SQLite 锁等待、慢盘写入、Defender 扫描或大快照提交不会再阻塞窗口事件循环。
 
-- 保存按项目 ID 串行，同一项目的自动保存采用 latest-wins 合并：正在写入时只保留最新快照，完成后最多追加一次写入；不同项目不得互相覆盖。
-- 渲染进程发起保存后应立即进入可见的保存中状态。Worker 返回成功、失败或超时后再更新保存状态和诊断，不得用同步 IPC 等待磁盘完成。
-- SQLite 的锁等待必须限制在 Worker 内，并采用有上限的退避重试；超过预算时返回可重试错误和非敏感上下文。不得以延长 `busy_timeout` 的方式阻塞主进程。
+- 保存按项目 ID 串行；同一项目、相同 `updatedAt` 的排队自动保存采用 latest-wins 合并，只写首个在途快照和最新排队快照。不同项目使用独立队列键，不会互相覆盖。
+- 工作区路径和数据库初始化在服务生命周期内按绝对路径复用；保存热路径不得重复读取 `desktop-workspace.json` 或执行目录 `stat`，当前 schema 也不再重复执行建表或全库搜索索引重建，搜索索引回填只在显式 schema 升级事务中执行。
+- 渲染进程发起保存后立即进入可见的保存中状态。Worker 返回成功、失败或 30 秒请求超时后再更新保存状态和诊断，不使用同步 IPC 等待磁盘完成。
+- SQLite 的 `busy_timeout` 为 100 ms；数据库忙碌只在 Worker 内进行 50/100/200/400 ms 的有上限退避重试，超过预算返回可重试错误和非敏感操作名。
 - 图片等大文件仍使用异步文件 API 写入工作区；数据库只写相对路径和元数据。保存任务必须保证项目快照提交与其引用的资产状态一致。
 - 改造不得改变 `platformBridge`、项目快照、SQLite schema 或目录包格式。首次迁移前必须保留数据库备份，并兼容现有 `desktop-workspace.json` 路径记录。
 - 验证除 `npm run test`、`npm run lint`、`npm run build` 外，必须运行 `npm run desktop:smoke` 与 `npm run desktop:smoke:ui`；新增测试应覆盖数据库忙碌、连续自动保存合并、保存失败可重试和窗口仍可响应。

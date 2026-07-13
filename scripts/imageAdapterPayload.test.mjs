@@ -11,7 +11,7 @@ const settingsSource = readFileSync(fileURLToPath(new URL('../src/store/settings
 const toolbarSettingsSource = readFileSync(fileURLToPath(new URL('../src/components/toolbar/settingsModel.ts', import.meta.url)), 'utf8')
 
 function getGptImageGenerationPayloadBuilder() {
-  const payloadBuilderMatch = openAiSource.match(/async function buildGptImageGenerationPayload[\s\S]*?return payload\n}/)
+  const payloadBuilderMatch = openAiSource.match(/async function buildGptImageGenerationPayload[\s\S]*?return payload\r?\n}/)
 
   if (!payloadBuilderMatch) {
     throw new Error('buildGptImageGenerationPayload should live in src/api/image/openai.ts')
@@ -21,7 +21,7 @@ function getGptImageGenerationPayloadBuilder() {
 }
 
 function getGptImageEditFormBuilder() {
-  const formBuilderMatch = openAiSource.match(/async function buildGptImageEditFormData[\s\S]*?return formData\n}/)
+  const formBuilderMatch = openAiSource.match(/async function buildGptImageEditFormData[\s\S]*?return formData\r?\n}/)
 
   if (!formBuilderMatch) {
     throw new Error('buildGptImageEditFormData should live in src/api/image/openai.ts')

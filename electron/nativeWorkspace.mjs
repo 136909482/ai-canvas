@@ -1,22 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import {
-  backupWorkspaceDatabase,
-  deleteWorkspaceProjectFromDatabase,
-  initializeWorkspaceDatabase,
-  listWorkspaceProjectsFromDatabase,
-  loadWorkspaceConfigFromDatabase,
-  loadWorkspaceProjectFromDatabase,
-  loadWorkflowTemplatesFromDatabase,
-  readWorkspaceDataFromDatabase,
-  queryWorkspaceAuditFromDatabase,
-  searchWorkspaceFromDatabase,
-  replaceWorkspaceDataInDatabase,
-  saveWorkspaceConfigToDatabase,
-  saveWorkspaceProjectToDatabase,
-  saveWorkflowTemplatesToDatabase,
-} from './nativeWorkspaceDatabase.mjs'
+import { createNativeWorkspaceDatabaseClient } from './nativeWorkspaceDatabaseClient.mjs'
 
 const WORKSPACE_MANIFEST_FILE_NAME = 'ai-canvas-workspace.json'
 const WORKSPACE_CONFIG_PATH = path.join('.config', 'config.json')
@@ -282,16 +267,32 @@ function prepareImportedProject(project, resolution) {
 
 export function createNativeWorkspaceService(options) {
   const { stateFilePath, selectDirectory, selectSaveFile, selectOpenFile } = options
+  const databaseClient = options.databaseClient ?? createNativeWorkspaceDatabaseClient()
   const pendingProjectImports = new Map()
+  const initializedWorkspaceDatabases = new Map()
+  let cachedWorkspacePath = null
+  let workspacePathLoad = null
 
-  async function getWorkspacePath() {
-    const state = await readJson(stateFilePath)
-    if (!state?.workspacePath) return null
-    try {
-      return (await stat(state.workspacePath)).isDirectory() ? path.resolve(state.workspacePath) : null
-    } catch {
-      return null
-    }
+  function getWorkspacePath() {
+    if (cachedWorkspacePath) return Promise.resolve(cachedWorkspacePath)
+    if (workspacePathLoad) return workspacePathLoad
+
+    workspacePathLoad = (async () => {
+      const state = await readJson(stateFilePath)
+      if (!state?.workspacePath) return null
+      try {
+        const workspacePath = path.resolve(state.workspacePath)
+        if (!(await stat(workspacePath)).isDirectory()) return null
+        cachedWorkspacePath = workspacePath
+        return workspacePath
+      } catch {
+        return null
+      }
+    })().finally(() => {
+      workspacePathLoad = null
+    })
+
+    return workspacePathLoad
   }
 
   async function requireWorkspacePath() {
@@ -300,17 +301,30 @@ export function createNativeWorkspaceService(options) {
     return workspacePath
   }
 
-  async function ensureWorkspaceDatabaseAt(workspacePath) {
-    const initialization = await initializeWorkspaceDatabase(workspacePath)
+  async function initializeWorkspaceDatabaseAt(workspacePath) {
+    const initialization = await databaseClient.initializeWorkspaceDatabase(workspacePath)
     if (initialization.created || initialization.previousVersion === 0) {
       const legacyData = await readWorkspaceDataAt(workspacePath)
       if (legacyData) {
-        replaceWorkspaceDataInDatabase(workspacePath, legacyData, 'workspace.import-json')
+        await databaseClient.replaceWorkspaceDataInDatabase(workspacePath, legacyData, 'workspace.import-json')
       }
       const legacyConfig = await readJson(path.join(workspacePath, WORKSPACE_CONFIG_PATH))
-      if (legacyConfig) saveWorkspaceConfigToDatabase(workspacePath, legacyConfig)
+      if (legacyConfig) await databaseClient.saveWorkspaceConfigToDatabase(workspacePath, legacyConfig)
     }
     return workspacePath
+  }
+
+  function ensureWorkspaceDatabaseAt(workspacePath) {
+    const normalizedPath = path.resolve(workspacePath)
+    const existing = initializedWorkspaceDatabases.get(normalizedPath)
+    if (existing) return existing
+
+    const initialization = initializeWorkspaceDatabaseAt(normalizedPath).catch((error) => {
+      initializedWorkspaceDatabases.delete(normalizedPath)
+      throw error
+    })
+    initializedWorkspaceDatabases.set(normalizedPath, initialization)
+    return initialization
   }
 
   async function requireWorkspaceDatabase() {
@@ -331,67 +345,69 @@ export function createNativeWorkspaceService(options) {
       const workspacePath = path.resolve(selected)
       await mkdir(workspacePath, { recursive: true })
       await writeJsonIfChanged(stateFilePath, { version: 1, workspacePath })
+      cachedWorkspacePath = workspacePath
+      workspacePathLoad = null
       await ensureWorkspaceDatabaseAt(workspacePath)
       return { supported: true, configured: true, directoryName: path.basename(workspacePath), directoryPath: workspacePath, permission: 'granted' }
     },
 
     async loadWorkspaceData() {
       const workspacePath = await getWorkspacePath()
-      return workspacePath ? readWorkspaceDataFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath)) : null
+      return workspacePath ? databaseClient.readWorkspaceDataFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath)) : null
     },
 
     async saveWorkspaceData(data) {
-      replaceWorkspaceDataInDatabase(await requireWorkspaceDatabase(), data)
+      await databaseClient.replaceWorkspaceDataInDatabase(await requireWorkspaceDatabase(), data)
     },
 
     async listWorkspaceProjects() {
       const workspacePath = await getWorkspacePath()
-      return workspacePath ? listWorkspaceProjectsFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath)) : null
+      return workspacePath ? databaseClient.listWorkspaceProjectsFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath)) : null
     },
 
     async loadWorkspaceProject(projectId) {
       const workspacePath = await getWorkspacePath()
       if (!workspacePath) return null
-      return loadWorkspaceProjectFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath), projectId)
+      return databaseClient.loadWorkspaceProjectFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath), projectId)
     },
 
     async saveWorkspaceProject(input) {
-      saveWorkspaceProjectToDatabase(await requireWorkspaceDatabase(), input)
+      await databaseClient.saveWorkspaceProjectToDatabase(await requireWorkspaceDatabase(), input)
     },
 
     async deleteWorkspaceProject(input) {
-      deleteWorkspaceProjectFromDatabase(await requireWorkspaceDatabase(), input)
+      await databaseClient.deleteWorkspaceProjectFromDatabase(await requireWorkspaceDatabase(), input)
     },
 
     async loadWorkspaceConfig() {
       const workspacePath = await getWorkspacePath()
-      return workspacePath ? loadWorkspaceConfigFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath)) : null
+      return workspacePath ? databaseClient.loadWorkspaceConfigFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath)) : null
     },
 
     async saveWorkspaceConfig(config) {
-      saveWorkspaceConfigToDatabase(await requireWorkspaceDatabase(), config)
+      await databaseClient.saveWorkspaceConfigToDatabase(await requireWorkspaceDatabase(), config)
     },
 
     async loadWorkflowTemplates() {
       const workspacePath = await getWorkspacePath()
-      return workspacePath ? loadWorkflowTemplatesFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath)) : null
+      return workspacePath ? databaseClient.loadWorkflowTemplatesFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath)) : null
     },
 
     async saveWorkflowTemplates(library) {
-      saveWorkflowTemplatesToDatabase(await requireWorkspaceDatabase(), library)
+      await databaseClient.saveWorkflowTemplatesToDatabase(await requireWorkspaceDatabase(), library)
     },
 
     async queryWorkspaceAudit(query) {
       const workspacePath = await getWorkspacePath()
       return workspacePath
-        ? queryWorkspaceAuditFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath), query)
+        ? databaseClient.queryWorkspaceAuditFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath), query)
         : { supported: true, entries: [], totalCount: 0, hasMore: false }
     },
 
     async searchWorkspace(query) {
       const workspacePath = await getWorkspacePath()
       return workspacePath
-        ? searchWorkspaceFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath), query)
+        ? databaseClient.searchWorkspaceFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath), query)
         : { supported: true, indexedDocumentCount: 0, entries: [] }
     },
 
@@ -468,9 +484,9 @@ export function createNativeWorkspaceService(options) {
     async exportWorkspaceBundle(input) {
       const workspacePath = await requireWorkspacePath()
       const databasePath = await ensureWorkspaceDatabaseAt(workspacePath)
-      const data = readWorkspaceDataFromDatabase(databasePath) ?? input.data
-      const config = loadWorkspaceConfigFromDatabase(databasePath) ?? input.config
-      const templates = loadWorkflowTemplatesFromDatabase(databasePath)
+      const data = await databaseClient.readWorkspaceDataFromDatabase(databasePath) ?? input.data
+      const config = await databaseClient.loadWorkspaceConfigFromDatabase(databasePath) ?? input.config
+      const templates = await databaseClient.loadWorkflowTemplatesFromDatabase(databasePath)
       const parent = await selectDirectory({ purpose: 'export' })
       if (!parent) throw new Error('未选择导出目录')
       if (path.resolve(parent) === path.resolve(workspacePath)) throw new Error('工作区目录包不能与当前工作区使用同一目录')
@@ -516,10 +532,10 @@ export function createNativeWorkspaceService(options) {
       }
       const assets = collectWorkspaceAssets(data)
       for (const relativePath of assets) await stat(resolveInside(bundlePath, relativePath))
-      await backupWorkspaceDatabase(workspacePath, 'before-bundle-import')
-      replaceWorkspaceDataInDatabase(workspacePath, data, 'workspace.import-bundle')
-      if (config) saveWorkspaceConfigToDatabase(workspacePath, config)
-      if (templates) saveWorkflowTemplatesToDatabase(workspacePath, templates)
+      await databaseClient.backupWorkspaceDatabase(workspacePath, 'before-bundle-import')
+      await databaseClient.replaceWorkspaceDataInDatabase(workspacePath, data, 'workspace.import-bundle')
+      if (config) await databaseClient.saveWorkspaceConfigToDatabase(workspacePath, config)
+      if (templates) await databaseClient.saveWorkflowTemplatesToDatabase(workspacePath, templates)
       for (const relativePath of assets) {
         const destination = resolveInside(workspacePath, relativePath)
         await mkdir(path.dirname(destination), { recursive: true })
@@ -568,7 +584,7 @@ export function createNativeWorkspaceService(options) {
       )
       const assetPaths = collectWorkspaceAssets({ projects: [project] })
       for (const relativePath of assetPaths) await stat(resolveInside(bundlePath, relativePath))
-      const workspaceData = readWorkspaceDataFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath))
+      const workspaceData = await databaseClient.readWorkspaceDataFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath))
       const candidateId = randomUUID()
       pendingProjectImports.set(candidateId, { bundlePath, project, assetPaths })
       return {
@@ -583,7 +599,7 @@ export function createNativeWorkspaceService(options) {
       const workspacePath = await requireWorkspacePath()
       const pending = pendingProjectImports.get(input.candidateId)
       if (!pending) throw new Error('项目导入候选已失效，请重新选择目录包')
-      const workspaceData = readWorkspaceDataFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath))
+      const workspaceData = await databaseClient.readWorkspaceDataFromDatabase(await ensureWorkspaceDatabaseAt(workspacePath))
         ?? { projects: [], activeProjectId: null, lastOpenedProjectId: null }
       const hasConflict = workspaceData.projects.some((project) => project.id === pending.project.id)
       if (hasConflict && input.resolution === 'preserve') throw new Error('项目 ID 已存在，请选择导入副本或替换现有项目')
@@ -600,7 +616,7 @@ export function createNativeWorkspaceService(options) {
       else workspaceData.projects.push(prepared.project)
       workspaceData.activeProjectId ??= prepared.project.id
       workspaceData.lastOpenedProjectId ??= prepared.project.id
-      replaceWorkspaceDataInDatabase(workspacePath, workspaceData, 'project.import-bundle')
+      await databaseClient.replaceWorkspaceDataInDatabase(workspacePath, workspaceData, 'project.import-bundle')
       pendingProjectImports.delete(input.candidateId)
       return {
         project: prepared.project,
@@ -621,5 +637,7 @@ export function createNativeWorkspaceService(options) {
       if (!filePath) throw new Error('未选择工作流文件')
       return { content: await readFile(filePath, 'utf8'), fileName: path.basename(filePath) }
     },
+
+    dispose: () => databaseClient.dispose(),
   }
 }

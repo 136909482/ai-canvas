@@ -17,7 +17,7 @@ if (!storeSource.includes('dragging: false')) {
   throw new Error('setNodePositions should mark final position changes as dragging=false so drag-stop side effects run')
 }
 
-if (!storeSource.includes('moveVisualGroupMembers(s.nodes, nextNodes, changes)')) {
+if (!storeSource.includes('applyVisualNodeChanges(s.nodes, changes)')) {
   throw new Error('setNodePositions should preserve visual group movement behavior')
 }
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useReactFlow, useViewport } from '@xyflow/react'
+import { NodeToolbar, Position } from '@xyflow/react'
 import { AlignHorizontalSpaceAround, AlignVerticalSpaceAround, BookmarkPlus, Layers3, Trash2, Ungroup } from 'lucide-react'
 import { TooltipIconButton } from '@/components/TooltipIconButton'
 import { selectSelectedGroupNodes, selectSelectedTopLevelNodes, useCanvasStore } from '@/store/useCanvasStore'
@@ -63,8 +63,6 @@ function ToolbarIconButton({ label, onClick, icon, className, testId }: ToolbarI
 }
 
 export function SelectionActionsToolbar() {
-  const { x, y, zoom } = useViewport()
-  const { getNodesBounds } = useReactFlow()
   const groupSelectedNodes = useCanvasStore((s) => s.groupSelectedNodes)
   const ungroupNode = useCanvasStore((s) => s.ungroupNode)
   const deleteSelectedElements = useCanvasStore((s) => s.deleteSelectedElements)
@@ -87,6 +85,7 @@ export function SelectionActionsToolbar() {
       ? selectedGroupNodes
       : [...selectedTopLevelNodes, ...selectedGroupNodes]
   ), [isSingleGroupSelection, selectedGroupNodes, selectedTopLevelNodes])
+  const toolbarNodeIds = useMemo(() => toolbarNodes.map((node) => node.id), [toolbarNodes])
 
   const changeSelectedGroupColor = (color: GroupNodeColor) => {
     if (!selectedGroupNode || color === selectedGroupColorOption.id) {
@@ -98,30 +97,20 @@ export function SelectionActionsToolbar() {
     setColorMenuGroupId(null)
   }
 
-  const toolbarPosition = useMemo(() => {
-    if (!isSingleGroupSelection && !isMultiSelection) {
-      return null
-    }
-
-    const bounds = getNodesBounds(toolbarNodes)
-
-    return {
-      left: bounds.x * zoom + x + (bounds.width * zoom) / 2,
-      top: bounds.y * zoom + y - 18,
-    }
-  }, [getNodesBounds, isMultiSelection, isSingleGroupSelection, toolbarNodes, x, y, zoom])
-
-  if (!toolbarPosition) {
+  if (!isSingleGroupSelection && !isMultiSelection) {
     return null
   }
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-30">
-      <div
-        className="pointer-events-auto absolute -translate-x-1/2 -translate-y-full"
-        style={{ left: toolbarPosition.left, top: toolbarPosition.top }}
-      >
-        <div role="toolbar" aria-label="所选节点操作" className={TOOLBAR_CLASS_NAME}>
+    <NodeToolbar
+      nodeId={toolbarNodeIds}
+      isVisible
+      position={Position.Top}
+      offset={18}
+      align="center"
+      className="pointer-events-auto z-30"
+    >
+      <div role="toolbar" aria-label="所选节点操作" className={TOOLBAR_CLASS_NAME}>
           {isSingleGroupSelection ? (
             <>
               <div className="relative">
@@ -208,8 +197,7 @@ export function SelectionActionsToolbar() {
               />
             </>
           )}
-        </div>
       </div>
-    </div>
+    </NodeToolbar>
   )
 }

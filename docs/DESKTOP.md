@@ -7,6 +7,8 @@ AI Canvas 桌面端使用 Electron 复用现有 React/Vite 应用。开发和打
 - Electron 主进程：`electron/main.mjs`
 - 安全 preload：`electron/preload.cjs`
 - 原生工作区文件服务：`electron/nativeWorkspace.mjs`
+- SQLite Worker 客户端：`electron/nativeWorkspaceDatabaseClient.mjs`
+- SQLite Worker 入口：`electron/nativeWorkspaceDatabaseWorker.mjs`
 - SQLite 工作区存储：`electron/nativeWorkspaceDatabase.mjs`
 - 桌面平台入口：`src/platform/desktop/desktopPlatform.ts`
 - 开发启动器：`scripts/electronDev.mjs`
@@ -16,7 +18,9 @@ AI Canvas 桌面端使用 Electron 复用现有 React/Vite 应用。开发和打
 
 preload 通过 `ai-canvas:workspace:*` 白名单 IPC 暴露工作区操作，不暴露通用 `ipcRenderer` 或 Node.js。共享组件和 store 仍然只调用 `platformBridge`。
 
-当前桌面 bridge 已使用 Electron IPC、Node 文件 API 和内置 `node:sqlite`，覆盖原生目录选择、项目/配置读写、图片资产、孤儿资产清理、工作流 JSON、工作区目录包和单项目目录包。项目和设置主数据位于所选工作区的 `.ai-canvas/workspace.sqlite`；媒体仍使用 `images/` 文件目录。Electron 用户数据目录只保存所选工作区路径，不保存项目正文。
+当前桌面 bridge 已使用 Electron IPC、Node 文件 API 和内置 `node:sqlite`，覆盖原生目录选择、项目/配置读写、图片资产、孤儿资产清理、工作流 JSON、工作区目录包和单项目目录包。所有同步 SQLite 操作都在独立持久化 Worker 中执行，主进程只进行异步 RPC 转发。项目和设置主数据位于所选工作区的 `.ai-canvas/workspace.sqlite`；媒体仍使用 `images/` 文件目录。Electron 用户数据目录只保存所选工作区路径，不保存项目正文。
+
+首次启动且尚未配置工作区时，应用必须先要求用户选择项目保存位置，完成目录加载后才允许新建或导入项目。项目 Store 同样拒绝在未配置工作区时创建临时项目，避免随后选择目录并重载工作区时丢失内存项目。
 
 ## 环境要求
 
@@ -91,7 +95,7 @@ npm run desktop:smoke:ui
 npm run desktop:build
 ```
 
-`desktop:build` 依赖 electron-builder 下载 Electron 运行时和 Windows 打包工具。若日志出现 `ECONNREFUSED 127.0.0.1:443`，先检查 DNS、代理环境变量和本地代理状态；这不是可以通过关闭 TLS 校验解决的证书问题。electron-builder 当前使用 HTTP/HTTPS CONNECT 代理，不直接接受 SOCKS5 地址；代理软件同时提供 HTTP 或 Mixed 端口时，可通过该端口保持 HTTPS 校验并构建：
+项目通过 `build.electronDist` 直接复用 `node_modules/electron/dist`，避免 electron-builder 再次下载同版本 Electron 运行时。Windows 资源编辑工具仍由 electron-builder 缓存管理；若日志出现 `ECONNREFUSED 127.0.0.1:443`，先检查 DNS、代理环境变量和本地代理状态；这不是可以通过关闭 TLS 校验解决的证书问题。electron-builder 当前使用 HTTP/HTTPS CONNECT 代理，不直接接受 SOCKS5 地址；代理软件同时提供 HTTP 或 Mixed 端口时，可通过该端口保持 HTTPS 校验并构建：
 
 ```bash
 npx cross-env HTTPS_PROXY=http://<proxy-host>:<http-or-mixed-port> HTTP_PROXY=http://<proxy-host>:<http-or-mixed-port> npm run desktop:build

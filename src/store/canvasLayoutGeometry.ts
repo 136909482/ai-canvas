@@ -1,4 +1,4 @@
-import type { Edge, Node, NodeChange } from '@xyflow/react'
+import { applyNodeChanges, type Edge, type Node, type NodeChange } from '@xyflow/react'
 
 export const DEFAULT_IMAGE_NODE_WIDTH = 340
 export const DEFAULT_IMAGE_NODE_HEIGHT = 340
@@ -392,6 +392,13 @@ export function moveVisualGroupMembers(previousNodes: Node[], nextNodes: Node[],
   }
 
   return movedNodes
+}
+
+export function applyVisualNodeChanges(nodes: Node[], changes: NodeChange[]) {
+  return changes.reduce((currentNodes, change) => {
+    const nextNodes = applyNodeChanges([change], currentNodes)
+    return moveVisualGroupMembers(currentNodes, nextNodes, [change])
+  }, nodes)
 }
 
 export function getDescendantNodeIds(nodes: Node[], rootIds: Set<string>) {

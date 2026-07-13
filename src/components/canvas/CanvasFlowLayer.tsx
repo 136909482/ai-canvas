@@ -5,7 +5,6 @@ import {
   MiniMap,
   Panel,
   ViewportPortal,
-  applyNodeChanges,
   type Connection,
   type DefaultEdgeOptions,
   type Edge,
@@ -16,6 +15,7 @@ import {
 } from '@xyflow/react'
 import { getAlignmentSnap, getNodeBox, getResizeAlignmentSnap, type AlignmentGuides } from '@/features/canvasAlignment/alignmentSnapping'
 import { nodeTypes } from '@/nodes/nodeRegistry'
+import { applyVisualNodeChanges } from '@/store/canvasLayoutGeometry'
 import { recordComponentRender } from '@/utils/performanceDiagnostics'
 import { clearCanvasImagePreviewCache, pauseThumbnailQueue, resumeThumbnailQueue } from '../canvasImagePreviewRuntime'
 import { CanvasPerformanceProvider } from '../CanvasPerformanceContext'
@@ -200,16 +200,21 @@ function getSnappedDraggedNodePositions(node: Node, draggedNodes: Node[], delta:
   }))
 }
 
-function applyNodePositions(nodes: Node[], positions: Array<{ id: string; position: { x: number; y: number } }>) {
+function applyNodePositions(
+  nodes: Node[],
+  positions: Array<{ id: string; position: { x: number; y: number } }>,
+  dragging: boolean,
+) {
   if (positions.length === 0) {
     return nodes
   }
 
-  const positionById = new Map(positions.map(({ id, position }) => [id, position]))
-  return nodes.map((currentNode) => {
-    const position = positionById.get(currentNode.id)
-    return position ? { ...currentNode, position } : currentNode
-  })
+  return applyVisualNodeChanges(nodes, positions.map(({ id, position }) => ({
+    id,
+    type: 'position',
+    position,
+    dragging,
+  })))
 }
 
 function applyNodeSelection(nodes: Node[], nodeIds: Set<string>, selected: boolean) {
@@ -445,7 +450,7 @@ export function CanvasFlowLayer({
       pendingNodeDragSettledChangesRef.current,
       changes,
     )
-    setInteractiveNodes((currentNodes) => applyNodeChanges(changes, currentNodes))
+    setInteractiveNodes((currentNodes) => applyVisualNodeChanges(currentNodes, changes))
     scheduleNodeDragSettledFlush(options)
   }, [scheduleNodeDragSettledFlush])
 
@@ -522,7 +527,7 @@ export function CanvasFlowLayer({
       if (didMove) {
         setIsNodeDragging(true)
       }
-      setInteractiveNodes((currentNodes) => applyNodeChanges(changes, currentNodes))
+      setInteractiveNodes((currentNodes) => applyVisualNodeChanges(currentNodes, changes))
       return
     }
 
@@ -548,7 +553,7 @@ export function CanvasFlowLayer({
         return
       }
 
-      setInteractiveNodes((currentNodes) => applyNodeChanges(pendingChanges, currentNodes))
+      setInteractiveNodes((currentNodes) => applyVisualNodeChanges(currentNodes, pendingChanges))
     })
   }, [])
 
@@ -644,7 +649,7 @@ export function CanvasFlowLayer({
     if (didMove) {
       setIsNodeDragging(true)
     }
-    setInteractiveNodes((currentNodes) => applyNodePositions(currentNodes, snappedPositions))
+    setInteractiveNodes((currentNodes) => applyNodePositions(currentNodes, snappedPositions, true))
 
     setAlignmentGuides(alignmentSnap.guides)
   }, [nodes])
@@ -663,7 +668,7 @@ export function CanvasFlowLayer({
     }
 
     if (!shouldShowAlignmentGuides) {
-      setInteractiveNodes((currentNodes) => applyNodePositions(currentNodes, finalPositions))
+      setInteractiveNodes((currentNodes) => applyNodePositions(currentNodes, finalPositions, false))
       if (shouldUseInternalDrag) {
         setNodePositions(getDraggedNodePositions(node, draggedNodes))
         if (dragStopCommitFrameRef.current !== null) {
@@ -688,7 +693,7 @@ export function CanvasFlowLayer({
       ? getSnappedDraggedNodePositions(node, draggedNodes, alignmentSnap.delta)
       : finalPositions
 
-    setInteractiveNodes((currentNodes) => applyNodePositions(currentNodes, settledPositions))
+    setInteractiveNodes((currentNodes) => applyNodePositions(currentNodes, settledPositions, false))
 
     if (!shouldSnap) {
       queueNodeDragSettledChanges(buildSettledPositionChanges(finalPositions), { commit: true })

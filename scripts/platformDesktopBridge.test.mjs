@@ -17,12 +17,24 @@ const platformTypesSource = readFileSync(
   fileURLToPath(new URL('../src/platform/types.ts', import.meta.url)),
   'utf8',
 )
+const storageSettingsSource = readFileSync(
+  fileURLToPath(new URL('../src/components/StorageSettingsDialog.tsx', import.meta.url)),
+  'utf8',
+)
 const preloadSource = readFileSync(
   fileURLToPath(new URL('../electron/preload.cjs', import.meta.url)),
   'utf8',
 )
 const electronMainSource = readFileSync(
   fileURLToPath(new URL('../electron/main.mjs', import.meta.url)),
+  'utf8',
+)
+const nativeWorkspaceSource = readFileSync(
+  fileURLToPath(new URL('../electron/nativeWorkspace.mjs', import.meta.url)),
+  'utf8',
+)
+const databaseWorkerSource = readFileSync(
+  fileURLToPath(new URL('../electron/nativeWorkspaceDatabaseWorker.mjs', import.meta.url)),
   'utf8',
 )
 
@@ -32,6 +44,13 @@ if (!platformIndexSource.includes("platformRuntime: PlatformRuntimeKind = isElec
 
 if (!platformIndexSource.includes('platformRuntime === \'desktop\' ? desktopPlatformBridge : browserPlatformBridge')) {
   throw new Error('platformBridge should not be permanently bound to the browser bridge.')
+}
+
+if (
+  !storageSettingsSource.includes("runtime.workspaceConfigured && platformRuntime === 'web'")
+  || !storageSettingsSource.includes('浏览器模式仅能读取授权目录名')
+) {
+  throw new Error('Browser-only workspace path guidance should not be displayed in the desktop client.')
 }
 
 if (desktopBridgeSource.includes('browserPlatformBridge')) {
@@ -84,8 +103,20 @@ if (preloadSource.includes('ipcRenderer,')) {
   throw new Error('Electron preload must not expose the raw ipcRenderer object.')
 }
 
-if (!electronMainSource.includes('registerWorkspaceIpcHandlers(createWorkspaceService())')) {
+const createServiceIndex = electronMainSource.indexOf('workspaceService = createWorkspaceService()')
+const registerHandlersIndex = electronMainSource.indexOf('registerWorkspaceIpcHandlers(workspaceService)')
+const createWindowIndex = electronMainSource.indexOf('createMainWindow(pageUrl)', registerHandlersIndex)
+if (createServiceIndex < 0 || registerHandlersIndex < createServiceIndex || createWindowIndex < registerHandlersIndex) {
   throw new Error('Electron main process should register the native workspace IPC handlers before opening the window.')
+}
+
+if (electronMainSource.includes('node:sqlite') || electronMainSource.includes('DatabaseSync')
+  || nativeWorkspaceSource.includes('node:sqlite') || nativeWorkspaceSource.includes('DatabaseSync')) {
+  throw new Error('Electron main process and native workspace service must not execute synchronous SQLite operations.')
+}
+
+if (!databaseWorkerSource.includes("from './nativeWorkspaceDatabase.mjs'")) {
+  throw new Error('Desktop SQLite operations should run inside the dedicated persistence Worker.')
 }
 
 if (!browserBridgeSource.includes('async exportWorkspaceBundle(input)')) {

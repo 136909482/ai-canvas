@@ -245,15 +245,11 @@ try {
     }
   }, { workspacePath, exportPath: exportParentPath, projectExportPath: projectExportParentPath })
 
-  await page.getByRole('button', { name: '设置' }).click()
-  await page.getByText('存储与保存', { exact: true }).click()
-  await page.getByText('还没有设置缓存目录。', { exact: true }).waitFor()
-  await page.getByRole('button', { name: '选择目录' }).click()
-  await page.getByText(`当前工作区：${workspacePath}`, { exact: true }).waitFor({ timeout: 15_000 })
+  await page.getByText('先选择项目保存位置', { exact: true }).waitFor()
+  await page.getByTestId('workspace-setup-picker').click()
   await page.getByText('P0 Source Project', { exact: true }).first().waitFor({ timeout: 15_000 })
   assert.equal(await desktopApp.evaluate(() => globalThis.__aiCanvasUiSmoke.workspaceSelections), 1)
 
-  await page.getByRole('button', { name: '关闭' }).click()
   await page.getByRole('button', { name: '设置', exact: true }).click()
   await page.getByTestId('settings-category-tools').click()
   await page.getByTestId('open-workspace-search').click()
@@ -265,6 +261,9 @@ try {
   await page.locator('.react-flow__node[data-id="p0-image-node"]').waitFor()
   await page.waitForFunction(() => document.querySelector('.react-flow__node[data-id="p0-image-node"]')?.classList.contains('selected'))
   await page.getByRole('button', { name: '文本组件' }).click()
+  await page.locator('.react-flow__node[data-id="p0-image-node"]').click()
+  await page.locator('.react-flow__node-textNode').last().click({ modifiers: ['Control'] })
+  await page.waitForFunction(() => document.querySelectorAll('.react-flow__node.selected').length >= 2)
   await page.getByTestId('save-selection-as-template').click()
   await page.getByLabel('输入模板名称').fill('P3 Prompt Starter')
   await page.getByRole('button', { name: '保存当前选区', exact: true }).click()
@@ -478,7 +477,7 @@ try {
   page = await desktopApp.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   await page.getByText('P0 Source Project', { exact: true }).first().waitFor({ timeout: 15_000 })
-  const image = page.getByRole('img', { name: 'P0 source asset' })
+  const image = page.getByRole('img', { name: 'P0 source asset' }).first()
   await image.waitFor({ timeout: 15_000 })
   await page.waitForFunction(() => {
     const candidate = document.querySelector('img[alt="P0 source asset"]')

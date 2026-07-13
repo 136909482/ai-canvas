@@ -42,7 +42,7 @@ src/
 - `store/` 放 Zustand store。复杂 store 的纯函数应拆到同目录辅助文件，避免把所有逻辑塞进 `use*Store.ts`。
 - `api/` 只负责外部 API 协议、请求、响应解析和错误归一化，不直接操作画布节点。
 - `platform/` 负责浏览器和桌面端差异，业务代码应通过 `platformBridge` 调用平台能力。
-- `electron/` 只负责桌面进程、窗口、内部静态/代理服务器、原生工作区文件/SQLite 服务和 preload。Node.js 文件与数据库能力必须通过受控 IPC 暴露，不得启用 renderer `nodeIntegration`；目录包和资产行为集中在 `electron/nativeWorkspace.mjs`，数据库 schema、事务、索引和备份集中在 `electron/nativeWorkspaceDatabase.mjs`。
+- `electron/` 只负责桌面进程、窗口、内部静态/代理服务器、原生工作区文件/SQLite 服务和 preload。Node.js 文件与数据库能力必须通过受控 IPC 暴露，不得启用 renderer `nodeIntegration`；目录包和资产行为集中在 `electron/nativeWorkspace.mjs`，Worker RPC 与按项目保存队列位于 `electron/nativeWorkspaceDatabaseClient.mjs`，Worker 入口位于 `electron/nativeWorkspaceDatabaseWorker.mjs`，数据库 schema、事务、索引和备份集中在 `electron/nativeWorkspaceDatabase.mjs`。
 - SQLite 审计写入、保留上限和参数化查询集中在 `electron/nativeWorkspaceDatabase.mjs`；渲染进程只能通过 `platformBridge.queryWorkspaceAudit()` 读取脱敏结果。
 - `scripts/` 中的桌面启动器负责选择空闲 Vite 端口和清理子进程；不要把这类进程管理逻辑放进 React 应用。
 - `types/` 只放真正跨多个模块共享的类型；模块内部类型优先放在对应 feature 或节点目录。

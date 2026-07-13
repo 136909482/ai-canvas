@@ -60,6 +60,7 @@
   "build": {
     "appId": "com.aicanvas.desktop",
     "productName": "AI Canvas",
+    "electronDist": "node_modules/electron/dist",
     "asar": true,
     "npmRebuild": false,
     "directories": {

@@ -11,6 +11,7 @@ const appRoot = path.resolve(currentDirectory, '..')
 const developmentUrl = process.env.ELECTRON_DEV_URL
 const distDirectory = path.join(appRoot, 'dist')
 let productionServer
+let workspaceService
 
 const workspaceIpcMethods = new Map([
   ['get-status', 'getWorkspaceStatus'],
@@ -270,7 +271,8 @@ if (!hasSingleInstanceLock) {
   })
 
   app.whenReady().then(async () => {
-    registerWorkspaceIpcHandlers(createWorkspaceService())
+    workspaceService = createWorkspaceService()
+    registerWorkspaceIpcHandlers(workspaceService)
     const pageUrl = developmentUrl || await startProductionServer()
     createMainWindow(pageUrl)
 
@@ -287,5 +289,8 @@ if (!hasSingleInstanceLock) {
     }
   })
 
-  app.on('before-quit', () => productionServer?.close())
+  app.on('before-quit', () => {
+    productionServer?.close()
+    void workspaceService?.dispose()
+  })
 }

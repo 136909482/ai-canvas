@@ -18,6 +18,8 @@ import { useDialogFocus } from '@/hooks/useDialogFocus'
 import { useFeedbackStore } from '@/store/useFeedbackStore'
 import { useProjectDialogStore } from '@/store/useProjectDialogStore'
 import { useProjectStore } from '@/store/useProjectStore'
+import { useSettingsDialogStore } from '@/store/useSettingsDialogStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { themeClasses } from '@/styles/themeClasses'
 import type { ProjectBundleImportCandidate, ProjectImportResolution } from '@/platform/types'
 import type { ProjectRecord } from '@/types'
@@ -142,6 +144,8 @@ function ProjectImportConflictDialog({
 export function ProjectManagerDialog() {
   const isOpen = useProjectDialogStore((state) => state.isOpen)
   const close = useProjectDialogStore((state) => state.close)
+  const openSettings = useSettingsDialogStore((state) => state.open)
+  const workspaceConfigured = useSettingsStore((state) => state.runtime.workspaceConfigured)
   const projects = useProjectStore((state) => state.projects)
   const activeProjectId = useProjectStore((state) => state.activeProjectId)
   const createProject = useProjectStore((state) => state.createProject)
@@ -202,8 +206,16 @@ export function ProjectManagerDialog() {
       return
     }
 
-    await createProject(name)
+    const projectId = await createProject(name)
+
+    if (projectId) {
+      close()
+      return
+    }
+
+    notify({ tone: 'warning', title: '需要保存位置', message: '请先选择项目保存位置，再新建项目。' })
     close()
+    openSettings('storage')
   }
 
   const handleRenameProject = async (name: string) => {
@@ -345,6 +357,11 @@ export function ProjectManagerDialog() {
     setBatchMode(false)
   }
 
+  const handleConfigureWorkspace = () => {
+    close()
+    openSettings('storage')
+  }
+
   const hasProjects = filteredProjects.length > 0
   const activePersistenceStatus = getActivePersistenceStatus()
   const activeProjectStatusView = getProjectManagerStatusView(activePersistenceStatus)
@@ -467,7 +484,7 @@ export function ProjectManagerDialog() {
                   </button>
                 ) : null}
 
-                {!batchMode ? (
+                {!batchMode && workspaceConfigured ? (
                   <>
                     <button
                       type="button"
@@ -488,6 +505,16 @@ export function ProjectManagerDialog() {
                       新建项目
                     </button>
                   </>
+                ) : !batchMode ? (
+                  <button
+                    type="button"
+                    onClick={handleConfigureWorkspace}
+                    data-testid="project-workspace-setup-button"
+                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-violet-400/25 bg-violet-500 px-4 text-sm font-semibold text-white transition hover:bg-violet-400"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    选择保存位置
+                  </button>
                 ) : null}
 
                 <button
@@ -545,7 +572,9 @@ export function ProjectManagerDialog() {
                 <div>
                   <div className="text-sm font-semibold text-[var(--text-primary)]">这里还没有符合条件的项目</div>
                   <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
-                    {activeCategory === 'archived'
+                    {!workspaceConfigured
+                      ? '请先选择项目保存位置，然后再创建第一个项目。'
+                      : activeCategory === 'archived'
                       ? '归档项目会保留完整快照和资产引用，并可随时恢复。'
                       : '试试切换分类、清空搜索，或者直接新建一个项目开始。'}
                   </p>

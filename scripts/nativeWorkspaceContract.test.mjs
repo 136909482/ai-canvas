@@ -295,6 +295,114 @@ test('native SQLite schema migration backs up an existing older database', async
   }
 })
 
+test('current SQLite schema initialization does not rebuild search indexes', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'ai-canvas-native-sqlite-current-'))
+  const workspace = path.join(root, 'workspace')
+  let service
+  try {
+    service = createService({
+      stateFilePath: path.join(root, 'state.json'),
+      directories: { workspace },
+    })
+    await service.pickWorkspaceDirectory()
+    const project = createProject('current-schema')
+    project.workingSnapshot.canvas.nodes.push({
+      id: 'current-text',
+      type: 'textNode',
+      position: { x: 0, y: 0 },
+      data: { text: 'original search content' },
+    })
+    await service.saveWorkspaceProject({ project, activeProjectId: project.id })
+
+    const database = new DatabaseSync(path.join(workspace, WORKSPACE_DATABASE_RELATIVE_PATH))
+    database.prepare("UPDATE search_documents SET content_text = 'sentinel' WHERE project_id = ? AND kind = 'text'").run(project.id)
+    database.close()
+
+    await initializeWorkspaceDatabase(workspace)
+
+    const reopened = new DatabaseSync(path.join(workspace, WORKSPACE_DATABASE_RELATIVE_PATH))
+    const row = reopened.prepare("SELECT content_text FROM search_documents WHERE project_id = ? AND kind = 'text'").get(project.id)
+    reopened.close()
+    assert.equal(row.content_text, 'sentinel')
+  } finally {
+    await service?.dispose()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('persistence worker keeps the main event loop responsive while SQLite is busy', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'ai-canvas-native-sqlite-busy-'))
+  const workspace = path.join(root, 'workspace')
+  let service
+  let lockingDatabase
+  try {
+    service = createService({
+      stateFilePath: path.join(root, 'state.json'),
+      directories: { workspace },
+    })
+    await service.pickWorkspaceDirectory()
+    lockingDatabase = new DatabaseSync(path.join(workspace, WORKSPACE_DATABASE_RELATIVE_PATH))
+    lockingDatabase.exec('BEGIN IMMEDIATE')
+
+    let timerFired = false
+    const releaseLock = new Promise((resolve) => {
+      setTimeout(() => {
+        timerFired = true
+        lockingDatabase.exec('ROLLBACK')
+        resolve()
+      }, 250)
+    })
+    const save = service.saveWorkspaceProject({
+      project: createProject('busy-retry'),
+      activeProjectId: 'busy-retry',
+    })
+
+    await Promise.all([save, releaseLock])
+    assert.equal(timerFired, true)
+    assert.equal((await service.loadWorkspaceProject('busy-retry')).id, 'busy-retry')
+  } finally {
+    try {
+      lockingDatabase?.exec('ROLLBACK')
+    } catch {
+      // The timed release rolled back the lock in the success path.
+    }
+    lockingDatabase?.close()
+    await service?.dispose()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('consecutive project autosaves keep only the latest queued snapshot', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'ai-canvas-native-save-queue-'))
+  const workspace = path.join(root, 'workspace')
+  let service
+  try {
+    service = createService({
+      stateFilePath: path.join(root, 'state.json'),
+      directories: { workspace },
+    })
+    await service.pickWorkspaceDirectory()
+    const versions = ['first', 'middle', 'latest'].map((name) => ({
+      ...createProject('queued-project'),
+      name,
+      updatedAt: 100,
+    }))
+
+    await Promise.all(versions.map((project) => service.saveWorkspaceProject({
+      project,
+      activeProjectId: project.id,
+      lastOpenedProjectId: project.id,
+    })))
+
+    assert.equal((await service.loadWorkspaceProject('queued-project')).name, 'latest')
+    const audit = await service.queryWorkspaceAudit({ scope: 'project', limit: 20 })
+    assert.equal(audit.entries.filter((entry) => entry.eventType === 'project.save').length, 2)
+  } finally {
+    await service?.dispose()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('native project bundles require explicit conflict resolution and isolate copied assets', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'ai-canvas-native-project-bundle-'))
   const sourceWorkspace = path.join(root, 'source-workspace')
