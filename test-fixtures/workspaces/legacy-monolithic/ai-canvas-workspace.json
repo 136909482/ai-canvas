@@ -1,0 +1,28 @@
+{
+  "projects": [
+    {
+      "id": "legacy-project",
+      "name": "Legacy Monolithic Project",
+      "savedSnapshot": null,
+      "workingSnapshot": {
+        "canvas": {
+          "nodes": [
+            {
+              "id": "legacy-text",
+              "type": "textNode",
+              "position": { "x": 10, "y": 20 },
+              "data": { "text": "loaded from monolithic workspace" }
+            }
+          ],
+          "edges": []
+        },
+        "taskQueue": { "tasks": [] }
+      },
+      "createdAt": 1000,
+      "updatedAt": 2000,
+      "lastOpenedAt": 3000
+    }
+  ],
+  "activeProjectId": "legacy-project",
+  "lastOpenedProjectId": "legacy-project"
+}

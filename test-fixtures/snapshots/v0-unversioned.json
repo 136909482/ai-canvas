@@ -1,0 +1,48 @@
+{
+  "canvas": {
+    "nodes": [
+      {
+        "id": "text-legacy",
+        "type": "textNode",
+        "position": { "x": 24, "y": 48 },
+        "data": { "text": "legacy prompt" }
+      },
+      {
+        "id": "generate-legacy",
+        "type": "generateNode",
+        "position": { "x": 320, "y": 48 },
+        "data": { "prompt": "legacy prompt", "activeTaskId": "task-legacy" }
+      }
+    ],
+    "edges": [
+      { "id": "edge-legacy", "source": "text-legacy", "target": "generate-legacy" }
+    ]
+  },
+  "taskQueue": {
+    "tasks": [
+      {
+        "id": "task-legacy",
+        "displayId": "LEGACY-1",
+        "kind": "image",
+        "sourceNodeId": "generate-legacy",
+        "previewNodeId": null,
+        "model": "qwen-image-2.0-pro",
+        "prompt": "legacy prompt",
+        "negativePrompt": "",
+        "ratio": "1:1",
+        "resolution": "1k",
+        "operationType": "text-to-image",
+        "sourceImageNodeId": null,
+        "provider": "aliyun",
+        "referenceImageUrls": [],
+        "status": "queued",
+        "errorMsg": "",
+        "remoteTaskId": null,
+        "remoteStatus": null,
+        "createdAt": 100,
+        "startedAt": 0,
+        "finishedAt": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+export const MAX_GENERATE_REFERENCE_IMAGES = 16

@@ -1,0 +1,12 @@
+{
+  "canvas": {
+    "nodes": [
+      {
+        "id": "text-partial",
+        "type": "textNode",
+        "position": { "x": 0, "y": 0 },
+        "data": { "text": "partial snapshot" }
+      }
+    ]
+  }
+}

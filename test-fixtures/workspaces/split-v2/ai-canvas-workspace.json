@@ -1,0 +1,15 @@
+{
+  "projects": [
+    {
+      "id": "split-project",
+      "name": "Split Workspace Project",
+      "createdAt": 4000,
+      "updatedAt": 5000,
+      "lastOpenedAt": 6000,
+      "archivedAt": null,
+      "fileName": "split-project.json"
+    }
+  ],
+  "activeProjectId": "split-project",
+  "lastOpenedProjectId": "split-project"
+}

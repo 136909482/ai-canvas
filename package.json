@@ -1,0 +1,83 @@
+{
+  "name": "ai-canvas",
+  "description": "A local-first visual canvas for AI image, video, and LLM workflows.",
+  "author": "AI Canvas",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 UV_THREADPOOL_SIZE=8 vite",
+    "test": "node scripts/run-tests.mjs",
+    "test:smoke": "node scripts/browserSmoke.mjs",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "desktop:check": "node scripts/desktopPreflight.mjs",
+    "desktop:smoke": "node scripts/desktopWorkspaceSmoke.mjs",
+    "desktop:smoke:ui": "node scripts/desktopWorkspaceUiSmoke.mjs",
+    "desktop:dev": "node scripts/electronDev.mjs",
+    "desktop:build": "npm run build && electron-builder --win portable",
+    "desktop:build:dir": "npm run build && electron-builder --win dir",
+    "perf:canvas": "node scripts/canvasDragPerf.mjs",
+    "perf:canvas:enforce": "node scripts/canvasDragPerf.mjs --enforce",
+    "validate:canvas-internal-drag": "node scripts/canvasInternalDragBrowserValidation.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@photo-sphere-viewer/autorotate-plugin": "^5.14.1",
+    "@photo-sphere-viewer/core": "^5.14.1",
+    "@tiptap/extension-placeholder": "^3.23.4",
+    "@tiptap/react": "^3.23.4",
+    "@tiptap/starter-kit": "^3.23.4",
+    "@tiptap/suggestion": "^3.23.4",
+    "@xyflow/react": "^12.10.2",
+    "dexie": "^4.4.2",
+    "lucide-react": "^0.487.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/node": "^24.12.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "cross-env": "^10.1.0",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "playwright": "^1.61.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.58.0",
+    "vite": "^8.0.4"
+  },
+  "build": {
+    "appId": "com.aicanvas.desktop",
+    "productName": "AI Canvas",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.ico",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "portable"
+      ],
+      "artifactName": "AI-Canvas-${version}-${arch}.${ext}"
+    }
+  }
+}

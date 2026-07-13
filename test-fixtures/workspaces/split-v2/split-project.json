@@ -1,0 +1,26 @@
+{
+  "id": "split-project",
+  "name": "Split Workspace Project",
+  "storageVersion": 2,
+  "savedSnapshot": null,
+  "savedSnapshotSameAsWorking": true,
+  "workingSnapshot": {
+    "schemaVersion": 1,
+    "canvas": {
+      "nodes": [
+        {
+          "id": "split-text",
+          "type": "textNode",
+          "position": { "x": 12, "y": 34 },
+          "data": { "text": "loaded from split workspace" }
+        }
+      ],
+      "edges": []
+    },
+    "taskQueue": { "tasks": [] }
+  },
+  "createdAt": 4000,
+  "updatedAt": 5000,
+  "lastOpenedAt": 6000,
+  "archivedAt": null
+}
