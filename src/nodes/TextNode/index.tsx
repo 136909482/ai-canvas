@@ -324,7 +324,10 @@ export const TextNode = memo(function TextNode({ id, data, selected, dragging }:
     }
 
     runTracked(() => {
-      updateNodeData(id, { text: '' })
+      updateNodeData(id, {
+        text: '',
+        richPrompt: createRichPromptDocumentFromText(''),
+      })
     })
     setCopyState('idle')
     setClearNoticeId(Date.now())

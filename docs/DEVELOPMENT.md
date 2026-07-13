@@ -72,6 +72,17 @@ Electron 持久化由 `electron/nativeWorkspace.mjs` 和 `electron/nativeWorkspa
 
 `platformBridge` 已提供项目级接口：`listWorkspaceProjects()`、`loadWorkspaceProject()`、`saveWorkspaceProject()`、`deleteWorkspaceProject()`、`exportProjectBundle()`、`prepareProjectBundleImport()`、`commitProjectBundleImport()`。启动和项目切换优先走项目摘要 + 单项目加载；自动保存、手动保存、创建、复制、重命名和删除都应优先写单个项目。整包 `loadWorkspaceData()` / `saveWorkspaceData()` 只保留给旧工作区兼容和迁移流程。磁盘资产治理通过 `inspectWorkspaceAssets()` 和 `cleanupUnusedWorkspaceAssets()` 完成，扫描必须先持久化活动项目并读取完整工作区数据，不能用组件闭包里的局部项目列表判断孤儿文件。
 
+### 桌面保存响应性
+
+Electron 主进程负责窗口、IPC 路由和生命周期，不得在其中直接执行 `node:sqlite` 的 `DatabaseSync` 打开、事务、索引更新或全量快照序列化。项目保存必须进入独立的持久化 Worker / 子进程，主进程只转发请求并异步回传结果；否则 SQLite 锁等待、慢盘写入、Defender 扫描或大快照提交会阻塞窗口事件循环并表现为“未响应”。
+
+- 保存按项目 ID 串行，同一项目的自动保存采用 latest-wins 合并：正在写入时只保留最新快照，完成后最多追加一次写入；不同项目不得互相覆盖。
+- 渲染进程发起保存后应立即进入可见的保存中状态。Worker 返回成功、失败或超时后再更新保存状态和诊断，不得用同步 IPC 等待磁盘完成。
+- SQLite 的锁等待必须限制在 Worker 内，并采用有上限的退避重试；超过预算时返回可重试错误和非敏感上下文。不得以延长 `busy_timeout` 的方式阻塞主进程。
+- 图片等大文件仍使用异步文件 API 写入工作区；数据库只写相对路径和元数据。保存任务必须保证项目快照提交与其引用的资产状态一致。
+- 改造不得改变 `platformBridge`、项目快照、SQLite schema 或目录包格式。首次迁移前必须保留数据库备份，并兼容现有 `desktop-workspace.json` 路径记录。
+- 验证除 `npm run test`、`npm run lint`、`npm run build` 外，必须运行 `npm run desktop:smoke` 与 `npm run desktop:smoke:ui`；新增测试应覆盖数据库忙碌、连续自动保存合并、保存失败可重试和窗口仍可响应。
+
 项目归档使用 `ProjectRecord.archivedAt` 和项目摘要中的同名字段，不移动或删除项目文件。启动 fallback、最近项目、活动项目切换和普通项目列表都必须排除已归档项目；当所有项目均已归档时保留归档记录并清空活动画布，恢复后再由用户显式打开。
 
 注意两类保存语义：
