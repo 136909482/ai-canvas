@@ -246,7 +246,13 @@ export function normalizeStorageConfig(config?: Partial<StorageConfig>): Storage
     ? config.themeMode
     : 'dark'
   const canvasPerformanceMode = config?.canvasPerformanceMode === 'performance' ? 'performance' : 'quality'
-  const edgeStyle = config?.edgeStyle === 'solid' ? 'solid' : 'animated'
+  const edgeStyle = config?.edgeStyle === 'solid'
+    || config?.edgeStyle === 'step'
+    || config?.edgeStyle === 'smoothstep'
+    ? config.edgeStyle
+    : config?.edgeStyle === 'colorful'
+      ? 'step'
+      : 'animated'
 
   return {
     autosaveIntervalMs,

@@ -51,7 +51,7 @@ const QUICK_CREATE_PREPEND_NODE_OFFSET_X = -220
 const QUICK_CREATE_NODE_OFFSET_Y = -20
 const IMAGE_HEAVY_CULLING_DISABLE_NODE_LIMIT = 80
 const IMAGE_HEAVY_CULLING_DISABLE_IMAGE_LIMIT = 8
-const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = { zIndex: 0, type: 'default', animated: true }
+const DEFAULT_EDGE_OPTIONS: DefaultEdgeOptions = { zIndex: 0, type: 'default', animated: false }
 const INTERNAL_DRAG_ENABLE_STORAGE_KEY = 'ai-canvas.enableInternalDrag'
 const VISIBLE_ELEMENT_CULLING_OVERRIDE_STORAGE_KEY = 'ai-canvas.visibleElementCulling'
 
@@ -649,19 +649,28 @@ export function Canvas() {
   const performanceClassName = [
     shouldUseLiteRendering ? 'canvas-performance-rendering' : '',
   ].filter(Boolean).join(' ')
-  const edgesAnimated = !shouldUseLiteRendering && edgeStyle !== 'solid'
+  const useDashedEdges = edgeStyle === 'animated'
+  const useStepEdges = edgeStyle === 'step' || edgeStyle === 'colorful'
+  const useSmoothStepEdges = edgeStyle === 'smoothstep'
   const edgeOptions = useMemo<DefaultEdgeOptions>(() => ({
     ...DEFAULT_EDGE_OPTIONS,
-    type: 'default',
-    animated: edgesAnimated,
-  }), [edgesAnimated])
+    type: useStepEdges ? 'step' : useSmoothStepEdges ? 'smoothstep' : 'default',
+    style: useDashedEdges ? { strokeDasharray: '6 4' } : undefined,
+  }), [useDashedEdges, useSmoothStepEdges, useStepEdges])
   const renderedEdges = useMemo(() => (
     edges.map((edge) => ({
       ...edge,
-      type: edge.type === 'straight' ? undefined : edge.type,
-      animated: edgesAnimated,
+      type: useStepEdges
+        ? 'step'
+        : useSmoothStepEdges
+          ? 'smoothstep'
+          : edge.type === 'straight' ? undefined : edge.type,
+      animated: false,
+      style: useDashedEdges
+        ? { ...edge.style, strokeDasharray: '6 4' }
+        : edge.style,
     }))
-  ), [edges, edgesAnimated])
+  ), [edges, useDashedEdges, useSmoothStepEdges, useStepEdges])
   const topLeftPanel = useMemo(() => (
     <CanvasTopBar
       compact={isTopBarCollapsed}

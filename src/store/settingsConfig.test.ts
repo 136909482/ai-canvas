@@ -2,6 +2,7 @@ import {
   fromWorkspaceConfigFile,
   normalizeConfig,
   normalizeProviderAsyncConfig,
+  normalizeStorageConfig,
   toWorkspaceConfigFile,
 } from './settingsConfig.ts'
 
@@ -93,6 +94,12 @@ function runSettingsConfigTests() {
   assert(normalized.storage.autosaveIntervalMs === 15_000, 'autosave interval should respect the minimum')
   assert(normalized.storage.workspaceDirectoryName === 'workspace', 'workspace directory name should be trimmed')
   assert(!('missing' in normalized.modelProviderProfileIds), 'bindings for missing models should be removed')
+
+  const legacyColorfulEdges = normalizeStorageConfig({ edgeStyle: 'colorful' })
+  assert(legacyColorfulEdges.edgeStyle === 'step', 'legacy colorful edge style should migrate to step')
+
+  const smoothStepEdges = normalizeStorageConfig({ edgeStyle: 'smoothstep' })
+  assert(smoothStepEdges.edgeStyle === 'smoothstep', 'smoothstep edge style should be preserved')
 
   const workspaceConfig = toWorkspaceConfigFile(normalized)
   assert(workspaceConfig.providerProfiles?.[0]?.apiKey === 'secret', 'workspace config should retain provider secrets')

@@ -103,7 +103,7 @@ export const CANVAS_EXPERIENCE_TEXT = {
   alignmentGuides: '\u62d6\u62fd\u5bf9\u9f50\u53c2\u8003\u7ebf',
   alignmentGuidesHint: '\u79fb\u52a8\u5230\u9644\u8fd1\u8282\u70b9\u5e76\u63a5\u8fd1\u5bf9\u9f50\u65f6\u663e\u793a\u8f85\u52a9\u7ebf',
   edgeStyle: '节点连线样式',
-  edgeStyleHint: '蚂蚁线带流动动画，更直观；实线静态显示，节点多时更稳定省性能。',
+  edgeStyleHint: '虚线、实线、直角折线与圆角折线均静态显示。',
   appearanceTheme: '外观主题',
   appearanceThemeHint: '和画布左上角工具栏的主题按钮同步。',
 } as const
@@ -122,8 +122,10 @@ export const EDGE_STYLE_OPTIONS: Array<{
   label: string
   description: string
 }> = [
-  { id: 'animated', label: '\u8682\u8681\u7ebf', description: '\u6d41\u52a8\u865a\u7ebf\u52a8\u753b' },
+  { id: 'animated', label: '\u865a\u7ebf', description: '\u9759\u6001\u865a\u7ebf' },
   { id: 'solid', label: '\u5b9e\u7ebf', description: '\u9759\u6001\u5b9e\u7ebf' },
+  { id: 'step', label: '\u76f4\u89d2\u6298\u7ebf', description: '\u9759\u6001 step \u6298\u7ebf' },
+  { id: 'smoothstep', label: '\u5706\u89d2\u6298\u7ebf', description: '\u9759\u6001 smoothstep \u6298\u7ebf' },
 ]
 
 export const THEME_MODE_OPTIONS: Array<{ id: ThemeMode; label: string }> = [
