@@ -3,6 +3,11 @@ import type { CanvasPerformanceMode } from '@/types'
 export const LARGE_IMAGE_EDGE_LIMIT = 1800
 export const LARGE_IMAGE_PIXEL_LIMIT = 2_000_000
 export const EMBEDDED_IMAGE_PERFORMANCE_BYTE_LIMIT = 1_500_000
+export const CANVAS_IMAGE_LOD_MIN_COUNT = 8
+export const CANVAS_IMAGE_LOD_ENTER_ZOOM = 0.24
+export const CANVAS_IMAGE_LOD_EXIT_ZOOM = 0.30
+
+export type CanvasImagePreviewQuality = 'full' | 'thumbnail'
 
 export interface CanvasImagePerformanceStats {
   imageNodeCount: number
@@ -110,4 +115,24 @@ export function shouldUseCanvasPerformanceRendering({
   canvasPerformanceMode: CanvasPerformanceMode
 }) {
   return canvasPerformanceMode === 'performance'
+}
+
+export function getCanvasImagePreviewQuality({
+  currentQuality,
+  zoom,
+  imageCount,
+}: {
+  currentQuality: CanvasImagePreviewQuality
+  zoom: number
+  imageCount: number
+}): CanvasImagePreviewQuality {
+  if (!Number.isFinite(zoom) || imageCount < CANVAS_IMAGE_LOD_MIN_COUNT) {
+    return 'full'
+  }
+
+  if (currentQuality === 'thumbnail') {
+    return zoom >= CANVAS_IMAGE_LOD_EXIT_ZOOM ? 'full' : 'thumbnail'
+  }
+
+  return zoom <= CANVAS_IMAGE_LOD_ENTER_ZOOM ? 'thumbnail' : 'full'
 }

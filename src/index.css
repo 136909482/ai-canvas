@@ -306,6 +306,13 @@ textarea::-webkit-scrollbar-thumb:hover {
   -webkit-backdrop-filter: none !important;
 }
 
+.canvas-image-heavy-stable img[data-canvas-image-source='workspace-thumbnail'],
+.canvas-image-heavy-stable img[data-canvas-image-source='runtime-thumbnail'] {
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
 /* Fix React Flow default background */
 .react-flow__renderer {
   background: transparent;

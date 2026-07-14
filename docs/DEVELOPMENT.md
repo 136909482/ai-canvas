@@ -32,7 +32,7 @@ AI Canvas 是一个基于 React Flow 的画布式 AI 创作工具。当前仓库
 - `src/store/useCanvasStore.ts`：画布节点、边、选择、复制粘贴、删除、分组、布局、节点数据更新和连线派生数据的主状态源。
 - `src/store/useHistoryStore.ts`：撤销/重做事务层。用户可感知的画布编辑动作应通过 `runTracked()` 或显式事务包裹。
 - `src/store/useProjectStore.ts`：多项目、当前项目、脏状态、保存、自动保存、快照恢复。
-- `src/store/useTaskQueueStore.ts`：生成任务队列。任务状态属于项目快照，不是临时 UI 状态。
+- `src/store/useTaskQueueStore.ts`：生成任务队列。任务状态属于本地项目快照，不是临时 UI 状态。
 - `src/store/useSettingsStore.ts`：模型、存储、工作区配置和旧配置迁移。
 
 优先把业务行为放在 store 或 feature orchestrator 中，组件负责展示、输入事件和调用已有行为。
@@ -56,6 +56,12 @@ Electron 持久化由 `electron/nativeWorkspace.mjs` 和 `electron/nativeWorkspa
 桌面文件改动至少运行 `npm run desktop:smoke`；涉及目录选择、项目保存、目录包或重启恢复时还要运行 `npm run desktop:smoke:ui`。UI 冒烟必须使用隔离临时工作区，不得读写用户的正式工作区。项目卡片会被自动保存状态刷新替换，smoke 不得在菜单动作之间长期持有卡片或按钮元素引用；项目切换后应等待项目管理弹层关闭再开始下一步。
 
 桌面端和网页端的长期存储方向记录在 `docs/ROADMAP.md`。共享 store 和组件只能通过 `platformBridge` 访问持久化能力；SQLite、OPFS、File System Access API、Electron IPC/Node 文件 API 和绝对路径都不应直接进入业务 store 或节点组件。
+
+### 网站端仓库边界
+
+账号、个人空间、PostgreSQL 关系化项目图、对象存储和服务端任务位于独立仓库 [ai-canvas-cloud](https://github.com/136909482/ai-canvas-cloud)。本仓库不引入 Cloud API、数据库 schema、Redis、Worker 或账号状态。
+
+两仓库只共享版本化 `ProjectRecord`、目录包和 Provider 契约。网站端通过显式导入读取本仓库导出内容；登录、退出或网络恢复不得自动上传本地工作区。Cloud 内部架构以其 `docs/DEVELOPMENT.md`、`docs/DATA_MODEL.md`、`docs/API.md` 和 `docs/ROADMAP.md` 为准，本文件不复制维护。
 
 ### 桌面 SQLite 工作区
 

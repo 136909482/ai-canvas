@@ -76,6 +76,8 @@ npm run desktop:build:installer
 
 Web 端通过 File System Access API 使用用户选择的工作区目录，项目采用项目级 JSON 读写。桌面端在所选工作区使用 `.ai-canvas/workspace.sqlite` 保存项目整体 JSON、设置和派生索引。两端媒体都存放在 `images/`，新资产按 `images/projects/<project-id>/` 归属项目，完整项目快照均为 `{ canvas, taskQueue }`。
 
+账号网站、PostgreSQL 项目图、对象存储和服务端任务在独立仓库 [ai-canvas-cloud](https://github.com/136909482/ai-canvas-cloud) 开发。本仓库继续维护本地 Web/Electron；两端只通过版本化 `ProjectRecord` 和目录包显式迁移，不共享运行时数据库，也不自动上传本地工作区。
+
 跨平台迁移使用稳定的工作区目录包：
 
 ```text

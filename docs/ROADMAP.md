@@ -4,7 +4,7 @@
 
 ## 当前基线
 
-截至 2026-07-12，以下能力已落地：
+截至 2026-07-14，以下能力已落地：
 
 - React Flow 多节点画布、历史撤销/重做、分组、布局、复制粘贴和连线派生数据。
 - 图片/视频生成、LLM 输出节点和可恢复任务队列。
@@ -20,17 +20,9 @@
 
 ## 当前阶段
 
-P0 Electron 桌面文件边界、P1 质量与数据治理、P2 桌面 SQLite 存储和当前 P3 扩展能力已完成。下一阶段进入 P4 稳定性与发布收尾，继续保持 `platformBridge` 和跨平台目录包契约稳定。
+P0 Electron 桌面文件边界、P1 质量与数据治理、P2 桌面 SQLite 存储、P3 扩展能力和 P4 稳定性与发布收尾已完成。本仓库进入本地 Web/Electron 维护阶段，继续保持 `platformBridge`、项目快照和跨平台目录包契约稳定。
 
-执行顺序：
-
-1. 已完成：补强 Web/Desktop 项目级接口和工作区目录包契约测试，固定旧工作区兼容行为。
-2. 已完成：真实 Electron 窗口和生产解包包已验证目录选择、项目创建与保存、目录包导出、危险确认取消/继续、替换导入、配置脱敏、资源恢复和重启恢复。
-3. 已完成：在 `src/platform/desktop/` 接入 Electron IPC 和 Node 文件 API，覆盖工作区、项目、配置、资产、工作流和目录包。
-4. 持续约束：组件、节点、Zustand store 和 feature orchestrator 只依赖 `platformBridge`。
-5. 已完成：按项目导入、ID 冲突检测和显式冲突处理；当前已按阶段约束进入 P2 SQLite 基础批次。
-
-ZIP 和项目合并不得混入 SQLite 基础批次。Provider API Key 随桌面服务商设置保存在 SQLite，不引入系统密钥链。
+后续改动优先修复本地工作区可靠性、桌面发布、兼容迁移和真实使用反馈。组件、节点、Zustand store 和 feature orchestrator 继续只依赖 `platformBridge`。
 
 ## P0：桌面文件边界（已完成）
 
@@ -84,11 +76,29 @@ ZIP 和项目合并不得混入 SQLite 基础批次。Provider API Key 随桌面
 - 已完成：`npm run desktop:build` 已通过受信任的 HTTP/Mixed 代理建立 HTTPS 下载链路并生成 Windows 便携版；解包产物 UI smoke 已通过。此前的 `127.0.0.1:443` 连接拒绝来自错误的下载链路，不是应用构建失败或必须绕过的 TLS 证书问题。
 - 已完成：增加 Windows NSIS 辅助安装包，支持安装范围与目录选择、桌面/开始菜单快捷方式和标准卸载；隔离安装、已安装程序 IPC smoke 与卸载闭环已通过。代码签名和正式发布渠道仍不在当前范围。
 
+## 网站端边界
+
+账号网站、PostgreSQL 关系化项目图、对象存储和服务端任务已迁移到独立仓库维护：
+
+- 仓库：<https://github.com/136909482/ai-canvas-cloud>
+- 网站端路线：<https://github.com/136909482/ai-canvas-cloud/blob/main/docs/ROADMAP.md>
+- 数据模型：<https://github.com/136909482/ai-canvas-cloud/blob/main/docs/DATA_MODEL.md>
+
+本仓库不新增 Cloud API、PostgreSQL、Redis、Worker、账号系统或 OSS 实现。需要跨仓库协调的长期契约仅包括：
+
+- 版本化 `ProjectRecord` 与 `{ canvas, taskQueue }` 快照语义。
+- 工作区和单项目目录包格式。
+- Provider API Key 导出脱敏。
+- 本地资产相对路径及目录包中的引用完整性。
+- 旧快照/旧工作区 fixture 的追加兼容。
+
+网站端通过显式导入读取本仓库导出的目录包；登录、退出或网络恢复不得让本仓库自动上传本地工作区。网站端的内部表结构、API、任务和部署计划只在 `ai-canvas-cloud` 维护。
+
 ## 暂不进入当前范围
 
 - 自动更新、代码签名和正式安装包渠道。
 - 项目合并导入和 ZIP 单文件封装。
-- 服务端协作、多端同步和远端数据库。
+- 账号、团队、实时协作、跨组织分享、商业计费和云端同步；这些能力属于 `ai-canvas-cloud`。
 - 自动按节点数量切换性能模式。
 - 把节点或媒体内容隐藏、留白来换取性能。
 

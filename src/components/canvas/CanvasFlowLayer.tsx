@@ -12,8 +12,11 @@ import {
   type Node,
   type NodeChange,
   type OnNodeDrag,
+  type ReactFlowInstance,
+  type Viewport,
 } from '@xyflow/react'
 import { getAlignmentSnap, getNodeBox, getResizeAlignmentSnap, type AlignmentGuides } from '@/features/canvasAlignment/alignmentSnapping'
+import { getCanvasImagePreviewQuality, type CanvasImagePreviewQuality } from '@/features/canvasPerformance/rendering'
 import { nodeTypes } from '@/nodes/nodeRegistry'
 import { applyVisualNodeChanges } from '@/store/canvasLayoutGeometry'
 import { recordComponentRender } from '@/utils/performanceDiagnostics'
@@ -286,6 +289,7 @@ interface CanvasFlowLayerProps {
   setNodePositions: (positions: Array<{ id: string; position: { x: number; y: number } }>) => void
   flushPendingNodeDragRef: MutableRefObject<(() => void) | null>
   shouldUseLiteRendering: boolean
+  imagePreviewCount: number
   shouldShowAlignmentGuides: boolean
   shouldUseInternalDrag: boolean
   shouldCullOffscreenElements: boolean
@@ -316,6 +320,7 @@ export function CanvasFlowLayer({
   setNodePositions,
   flushPendingNodeDragRef,
   shouldUseLiteRendering,
+  imagePreviewCount,
   shouldShowAlignmentGuides,
   shouldUseInternalDrag,
   shouldCullOffscreenElements,
@@ -330,7 +335,11 @@ export function CanvasFlowLayer({
 }: CanvasFlowLayerProps) {
   recordComponentRender('CanvasFlowLayer')
   const [isNodeDragging, setIsNodeDragging] = useState(false)
+  const [imagePreviewQuality, setImagePreviewQuality] = useState<CanvasImagePreviewQuality>('full')
+  const imagePreviewQualityRef = useRef<CanvasImagePreviewQuality>('full')
+  const lastViewportZoomRef = useRef(0.8)
   const isViewportInteractingRef = useRef(false)
+  const isViewportThumbnailQueuePausedRef = useRef(false)
   const isNodeDraggingRef = useRef(false)
   const isNodeDragRenderingActiveRef = useRef(false)
   const [interactiveNodes, setInteractiveNodes] = useState<Node[]>(nodes)
@@ -454,13 +463,62 @@ export function CanvasFlowLayer({
     scheduleNodeDragSettledFlush(options)
   }, [scheduleNodeDragSettledFlush])
 
-  const handleViewportMoveStart = useCallback(() => {
+  const updateImagePreviewQuality = useCallback((zoom: number, options?: { allowFullQualityRestore?: boolean }) => {
+    lastViewportZoomRef.current = zoom
+    const nextQuality = getCanvasImagePreviewQuality({
+      currentQuality: imagePreviewQualityRef.current,
+      zoom,
+      imageCount: imagePreviewCount,
+    })
+    if (
+      imagePreviewQualityRef.current === 'thumbnail'
+      && nextQuality === 'full'
+      && options?.allowFullQualityRestore === false
+    ) {
+      return
+    }
+    if (nextQuality === imagePreviewQualityRef.current) {
+      return
+    }
+
+    imagePreviewQualityRef.current = nextQuality
+    setImagePreviewQuality(nextQuality)
+  }, [imagePreviewCount])
+
+  const pauseViewportThumbnailWork = useCallback(() => {
+    if (isViewportThumbnailQueuePausedRef.current) {
+      return
+    }
+    isViewportThumbnailQueuePausedRef.current = true
+    pauseThumbnailQueue()
+  }, [])
+
+  const resumeViewportThumbnailWork = useCallback(() => {
+    if (!isViewportThumbnailQueuePausedRef.current) {
+      return
+    }
+    isViewportThumbnailQueuePausedRef.current = false
+    resumeThumbnailQueue()
+  }, [])
+
+  useEffect(() => {
+    updateImagePreviewQuality(lastViewportZoomRef.current)
+  }, [updateImagePreviewQuality])
+
+  const handleReactFlowInit = useCallback((instance: ReactFlowInstance) => {
+    updateImagePreviewQuality(instance.getZoom())
+  }, [updateImagePreviewQuality])
+
+  const handleViewportMoveStart = useCallback((_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
     clearViewportRestoreTimers()
     clearNodeDragRenderRestoreTimers()
     isViewportInteractingRef.current = true
-  }, [clearNodeDragRenderRestoreTimers, clearViewportRestoreTimers])
+    pauseViewportThumbnailWork()
+    updateImagePreviewQuality(viewport.zoom, { allowFullQualityRestore: false })
+  }, [clearNodeDragRenderRestoreTimers, clearViewportRestoreTimers, pauseViewportThumbnailWork, updateImagePreviewQuality])
 
-  const handleViewportMove = useCallback(() => {
+  const handleViewportMove = useCallback((_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
+    updateImagePreviewQuality(viewport.zoom, { allowFullQualityRestore: false })
     if (isViewportInteractingRef.current) {
       return
     }
@@ -468,12 +526,15 @@ export function CanvasFlowLayer({
     clearViewportRestoreTimers()
     clearNodeDragRenderRestoreTimers()
     isViewportInteractingRef.current = true
-  }, [clearNodeDragRenderRestoreTimers, clearViewportRestoreTimers])
+    pauseViewportThumbnailWork()
+  }, [clearNodeDragRenderRestoreTimers, clearViewportRestoreTimers, pauseViewportThumbnailWork, updateImagePreviewQuality])
 
-  const handleViewportMoveEnd = useCallback(() => {
+  const handleViewportMoveEnd = useCallback((_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
+    updateImagePreviewQuality(viewport.zoom, { allowFullQualityRestore: false })
     clearViewportRestoreTimers()
 
     if (!isViewportInteractingRef.current) {
+      resumeViewportThumbnailWork()
       if (!isNodeDraggingRef.current && isNodeDragRenderingActiveRef.current) {
         scheduleNodeDragSettledFlush({ commit: true })
       }
@@ -483,6 +544,8 @@ export function CanvasFlowLayer({
     viewportInteractionRestoreTimeoutRef.current = window.setTimeout(() => {
       viewportInteractionRestoreFrameRef.current = window.requestAnimationFrame(() => {
         isViewportInteractingRef.current = false
+        resumeViewportThumbnailWork()
+        updateImagePreviewQuality(lastViewportZoomRef.current)
         viewportInteractionRestoreFrameRef.current = null
         viewportInteractionRestoreTimeoutRef.current = null
       })
@@ -491,7 +554,7 @@ export function CanvasFlowLayer({
     if (!isNodeDraggingRef.current && isNodeDragRenderingActiveRef.current) {
       scheduleNodeDragSettledFlush({ commit: true })
     }
-  }, [clearViewportRestoreTimers, scheduleNodeDragSettledFlush])
+  }, [clearViewportRestoreTimers, resumeViewportThumbnailWork, scheduleNodeDragSettledFlush, updateImagePreviewQuality])
 
   useEffect(() => {
     const handleHistoryShortcutCapture = (event: KeyboardEvent) => {
@@ -713,6 +776,7 @@ export function CanvasFlowLayer({
 
   useEffect(() => () => {
     clearViewportRestoreTimers()
+    resumeViewportThumbnailWork()
     clearCanvasImagePreviewCache()
     clearPendingInteractiveNodeChanges()
     clearNodeDragRenderRestoreTimers()
@@ -728,7 +792,7 @@ export function CanvasFlowLayer({
       window.cancelAnimationFrame(dragStopCommitFrameRef.current)
       dragStopCommitFrameRef.current = null
     }
-  }, [clearNodeDragRenderRestoreTimers, clearPendingInteractiveNodeChanges, clearViewportRestoreTimers])
+  }, [clearNodeDragRenderRestoreTimers, clearPendingInteractiveNodeChanges, clearViewportRestoreTimers, resumeViewportThumbnailWork])
 
   const shouldDeferThumbnailWork = isNodeDragging
 
@@ -743,8 +807,9 @@ export function CanvasFlowLayer({
 
   const canvasPerformanceContextValue = useMemo(() => ({
     forceLowQualityImages: shouldUseLiteRendering,
+    imagePreviewQuality,
     deferThumbnailWork: false,
-  }), [shouldUseLiteRendering])
+  }), [imagePreviewQuality, shouldUseLiteRendering])
   const shouldCullReactFlowElements = shouldStabilizeViewportElements
     ? false
     : shouldCullOffscreenElements
@@ -764,6 +829,7 @@ export function CanvasFlowLayer({
         onMoveStart={handleViewportMoveStart}
         onMove={handleViewportMove}
         onMoveEnd={handleViewportMoveEnd}
+        onInit={handleReactFlowInit}
         onNodeDragStart={handleNodeDragStart}
         onNodeDrag={shouldShowAlignmentGuides ? handleNodeDrag : undefined}
         onNodeDragStop={handleNodeDragStop}

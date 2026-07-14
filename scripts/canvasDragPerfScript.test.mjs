@@ -5,6 +5,10 @@ const source = readFileSync(
   fileURLToPath(new URL('./canvasDragPerf.mjs', import.meta.url)),
   'utf8',
 )
+const contractSource = readFileSync(
+  fileURLToPath(new URL('./canvasPerfContract.mjs', import.meta.url)),
+  'utf8',
+)
 const packageJson = JSON.parse(readFileSync(
   fileURLToPath(new URL('../package.json', import.meta.url)),
   'utf8',
@@ -62,6 +66,28 @@ if (
   !source.includes('viewportZoomSamples')
 ) {
   throw new Error('Canvas drag perf sampler should support zoom sampling with viewport zoom diagnostics')
+}
+
+if (
+  !source.includes('--pan-zoom')
+  || !source.includes('preparePanZoomGesture')
+  || !source.includes('validateCanvasPerformanceSample')
+  || !source.includes('document.elementFromPoint')
+  || !source.includes('waitForZoomImageQuality')
+  || !source.includes('image preview quality did not settle before gesture')
+  || !source.includes('image preview quality did not settle after zoom')
+  || !source.includes('data-canvas-image-source')
+  || !source.includes('imageSourceSwitchCount')
+) {
+  throw new Error('Canvas performance sampling should validate preset zoom and report actual image source switches')
+}
+
+if (
+  !contractSource.includes("name: 'image-dense-interaction'")
+  || !contractSource.includes('p95FrameMs: 16.8')
+  || !contractSource.includes('viewport zoom did not change during gesture')
+) {
+  throw new Error('Canvas performance contract should enforce the documented image-dense budget and invalid zoom samples')
 }
 
 if (

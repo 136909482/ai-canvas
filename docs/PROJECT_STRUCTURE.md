@@ -14,6 +14,8 @@ test-fixtures/ 长期保留的快照和工作区兼容样本
 
 `dist/`、`release/`、`output/` 和 `test-results/` 都是生成目录，不作为源码入口，也不进入 Git。
 
+账号网站位于独立仓库 <https://github.com/136909482/ai-canvas-cloud>。本仓库不新增 Cloud 服务端目录。
+
 ## 顶层目录
 
 ```text

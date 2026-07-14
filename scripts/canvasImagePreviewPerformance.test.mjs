@@ -35,8 +35,21 @@ if (source.includes('LOW_QUALITY_PLACEHOLDER_SRC') || source.includes('data-low-
   throw new Error('CanvasImagePreview should not blank images with placeholders while low-quality previews are pending')
 }
 
-if (!source.includes('thumbnailSrc ?? src')) {
+if (!componentSource.includes('persistentThumbnailSrc ?? runtimeThumbnailSrc ?? src')) {
   throw new Error('CanvasImagePreview should keep rendering the full image until a thumbnail is ready')
+}
+
+if (
+  !runtimeSource.includes('decodeImageSource')
+  || !runtimeSource.includes('MAX_CONCURRENT_IMAGE_SOURCE_DECODES = 1')
+  || !componentSource.includes('setRenderedSource')
+  || !componentSource.includes('data-canvas-image-source')
+) {
+  throw new Error('CanvasImagePreview should decode candidate sources before atomically switching the rendered image')
+}
+
+if (componentSource.includes('key={`${src}')) {
+  throw new Error('CanvasImagePreview should not remount while switching sources because that blanks the current image')
 }
 
 if (!runtimeSource.includes('pauseThumbnailQueue') || !runtimeSource.includes('activeThumbnailControllers')) {

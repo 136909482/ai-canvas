@@ -703,6 +703,7 @@ export function Canvas() {
         setNodePositions={setNodePositions}
         flushPendingNodeDragRef={flushPendingNodeDragRef}
         shouldUseLiteRendering={shouldUseLiteRendering}
+        imagePreviewCount={imagePerformanceStats.imageNodeCount}
         shouldShowAlignmentGuides={shouldShowAlignmentGuides}
         shouldUseInternalDrag={shouldUseInternalDrag}
         shouldCullOffscreenElements={shouldCullOffscreenElements}

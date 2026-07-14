@@ -41,13 +41,22 @@ if (!canvasCombinedSource.includes('CanvasPerformanceProvider')) {
 if (
   !canvasCombinedSource.includes('pauseThumbnailQueue()') ||
   !canvasCombinedSource.includes('return resumeThumbnailQueue') ||
-  !canvasCombinedSource.includes('shouldDeferThumbnailWork')
+  !canvasCombinedSource.includes('shouldDeferThumbnailWork') ||
+  !canvasFlowLayerSource.includes('pauseViewportThumbnailWork()') ||
+  !canvasFlowLayerSource.includes('resumeViewportThumbnailWork()')
 ) {
-  throw new Error('Canvas should pause thumbnail queue during interactions without broadcasting rerenders to image previews')
+  throw new Error('Canvas should pause thumbnail queue during node and viewport interactions without broadcasting rerenders to image previews')
 }
 
 if (imagePreviewSource.includes('deferThumbnailWork')) {
   throw new Error('CanvasImagePreview should not subscribe to interaction-only deferThumbnailWork because that rerenders every mounted image during drag/pan')
+}
+
+if (
+  !indexCssSource.includes("img[data-canvas-image-source='workspace-thumbnail']")
+  || !indexCssSource.includes('will-change: transform')
+) {
+  throw new Error('Stable image-heavy canvases should pre-promote lightweight thumbnail textures for first-pan compositing')
 }
 
 if (!canvasCombinedSource.includes('onNodeDragStart={handleNodeDragStart}')) {

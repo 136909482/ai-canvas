@@ -2,6 +2,11 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { createServer } from 'node:net'
 import { extname, resolve, sep } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
+import {
+  evaluateCanvasPerformanceBudget,
+  getCanvasPerformanceBudget,
+  validateCanvasPerformanceSample,
+} from './canvasPerfContract.mjs'
 
 const LEGACY_PROJECT_STORAGE_KEY = 'ai-canvas-projects'
 const WORKSPACE_MANIFEST_FILE_NAME = 'ai-canvas-workspace.json'
@@ -14,8 +19,12 @@ const DEFAULT_DRAG_STEPS = 90
 const DEFAULT_ZOOM_FROM = 0.8
 const DEFAULT_ZOOM_TO = 0.24
 const DEFAULT_ZOOM_STEPS = 42
+const DEFAULT_PAN_ZOOM = 1 / 6
 const SERVER_READY_TIMEOUT_MS = 30_000
 const THUMBNAIL_READY_TIMEOUT_MS = 8_000
+const PAN_PREVIEW_SETTLE_MS = 500
+const ZOOM_PREVIEW_SETTLE_MS = 200
+const ZOOM_IMAGE_QUALITY_TIMEOUT_MS = 10_000
 const REPORT_DIR = resolve(process.cwd(), 'output/performance')
 const TRACE_CATEGORIES = [
   'devtools.timeline',
@@ -51,6 +60,7 @@ function parseArgs(argv) {
     zoomFrom: DEFAULT_ZOOM_FROM,
     zoomTo: DEFAULT_ZOOM_TO,
     zoomSteps: DEFAULT_ZOOM_STEPS,
+    panZoom: DEFAULT_PAN_ZOOM,
     workspaceDir: '',
     projectId: '',
     projectName: '',
@@ -100,6 +110,10 @@ function parseArgs(argv) {
         break
       case '--zoom-steps':
         options.zoomSteps = Math.max(1, Number(nextValue))
+        index += 1
+        break
+      case '--pan-zoom':
+        options.panZoom = Math.max(0.05, Number(nextValue))
         index += 1
         break
       case '--workspace-dir':
@@ -184,6 +198,7 @@ Options:
   --zoom-from <scale>         Precondition zoom level before zoom sampling. Default: ${DEFAULT_ZOOM_FROM}
   --zoom-to <scale>           Target zoom level for zoom sampling. Default: ${DEFAULT_ZOOM_TO}
   --zoom-steps <count>        Wheel event count for zoom sampling. Default: ${DEFAULT_ZOOM_STEPS}
+  --pan-zoom <scale>          Precondition zoom for pan/select-pan. Default: ${DEFAULT_PAN_ZOOM.toFixed(4)}
   --workspace-dir <path>      Load a real AI Canvas workspace directory instead of synthetic nodes.
   --project-id <id>           Project id to load from the workspace manifest.
   --project-name <name>       Project name to load from the workspace manifest.
@@ -257,12 +272,23 @@ function createSvgDataUrl(index, width, height) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
+function createCompactSvgDataUrl(index, width, height) {
+  const hue = (index * 43) % 360
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="hsl(${hue} 68% 46%)"/><circle cx="72%" cy="32%" r="18%" fill="white" opacity=".18"/></svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+}
+
 function createPerformanceWorkspace(options) {
   const now = Date.now()
+  const createScenarioImage = options.imageCount >= 300 ? createCompactSvgDataUrl : createSvgDataUrl
+  const thumbnailWidth = Math.min(512, options.imageWidth)
+  const thumbnailHeight = Math.max(1, Math.round(options.imageHeight * (thumbnailWidth / options.imageWidth)))
+  const sharedThumbnailUrl = createScenarioImage(0, thumbnailWidth, thumbnailHeight)
   const nodes = Array.from({ length: options.imageCount }, (_, index) => {
     const column = index % 2
     const row = Math.floor(index / 2)
     const id = `perf-img-${index + 1}`
+    const imageUrl = createScenarioImage(index, options.imageWidth, options.imageHeight)
 
     return {
       id,
@@ -278,8 +304,12 @@ function createPerformanceWorkspace(options) {
       data: {
         prompt: '',
         negativePrompt: '',
-        imageUrl: createSvgDataUrl(index, options.imageWidth, options.imageHeight),
-        imageAsset: null,
+        imageUrl,
+        imageAsset: {
+          thumbnailRelativePath: sharedThumbnailUrl,
+          originalWidth: options.imageWidth,
+          originalHeight: options.imageHeight,
+        },
         name: `Perf Large Image ${index + 1}`,
         imageNaturalWidth: options.imageWidth,
         imageNaturalHeight: options.imageHeight,
@@ -721,10 +751,17 @@ function summarize(samples) {
   const maxWorkspaceThumbnailPreviewCount = samples.workspaceThumbnailPreviewSamples.length
     ? Math.max(...samples.workspaceThumbnailPreviewSamples)
     : 0
+  const imageSourceSamples = Array.isArray(samples.imageSourceSamples) ? samples.imageSourceSamples : []
+  const finalImageSources = imageSourceSamples.at(-1) ?? {
+    original: 0,
+    workspaceThumbnail: 0,
+    runtimeThumbnail: 0,
+  }
 
   return {
     frameCount: frames.length,
     allFrameCount: allFrames.length,
+    allFramesOver32ms: allFrames.filter((value) => value > 32).length,
     dragFrameCount: dragFrames.length,
     averageFrameMs: frames.length ? totalFrameMs / frames.length : 0,
     p95FrameMs: percentile(frames, 95),
@@ -743,34 +780,17 @@ function summarize(samples) {
     maxLowQualityPlaceholderCount,
     workspaceThumbnailPreviewSeen: samples.workspaceThumbnailPreviewSamples.some((count) => count > 0),
     maxWorkspaceThumbnailPreviewCount,
+    imageSources: {
+      final: finalImageSources,
+      maxOriginal: Math.max(0, ...imageSourceSamples.map((sample) => sample.original ?? 0)),
+      maxWorkspaceThumbnail: Math.max(0, ...imageSourceSamples.map((sample) => sample.workspaceThumbnail ?? 0)),
+      maxRuntimeThumbnail: Math.max(0, ...imageSourceSamples.map((sample) => sample.runtimeThumbnail ?? 0)),
+      switches: samples.imageSourceSwitchCount ?? 0,
+    },
     renderedNodesDuringGesture: summarizeCountSamples(samples.renderedNodeSamples ?? []),
     renderedEdgesDuringGesture: summarizeCountSamples(samples.renderedEdgeSamples ?? []),
     renderedImagesDuringGesture: summarizeCountSamples(samples.renderedImageSamples ?? []),
     viewportZoomDuringGesture: summarizeNumericSamples(samples.viewportZoomSamples ?? []),
-  }
-}
-
-function evaluateBudget(summary, options = {}) {
-  const failures = []
-  const averageFrameBudget = options.workspaceMode ? 17.25 : 16.7
-  const p95FrameBudget = options.workspaceMode ? 24 : 32
-
-  if (summary.averageFrameMs > averageFrameBudget) {
-    failures.push(`average frame ${summary.averageFrameMs.toFixed(2)}ms > ${averageFrameBudget}ms`)
-  }
-  if (summary.p95FrameMs > p95FrameBudget) {
-    failures.push(`p95 frame ${summary.p95FrameMs.toFixed(2)}ms > ${p95FrameBudget}ms`)
-  }
-  if (summary.longTaskTotalMs > 120) {
-    failures.push(`long task total ${summary.longTaskTotalMs.toFixed(2)}ms > 120ms`)
-  }
-  if (summary.maxLowQualityPlaceholderCount > 0) {
-    failures.push(`low-quality placeholders ${summary.maxLowQualityPlaceholderCount} > 0`)
-  }
-
-  return {
-    passed: failures.length === 0,
-    failures,
   }
 }
 
@@ -788,6 +808,9 @@ async function startBrowserSampler(page) {
       renderedEdgeSamples: [],
       renderedImageSamples: [],
       viewportZoomSamples: [],
+      imageSourceSamples: [],
+      imageSourceSwitchCount: 0,
+      imageSourceByElement: new WeakMap(),
       lastFrameAt: null,
       dragActive: false,
       lastDragFrameAt: null,
@@ -834,6 +857,31 @@ async function startBrowserSampler(page) {
     }
 
     const sampleLowQualityImages = () => {
+      const previewImages = document.querySelectorAll('img[data-canvas-image-source]')
+      const imageSources = {
+        original: 0,
+        workspaceThumbnail: 0,
+        runtimeThumbnail: 0,
+      }
+
+      previewImages.forEach((image) => {
+        const source = image.getAttribute('data-canvas-image-source') || 'original'
+        if (source === 'workspace-thumbnail') {
+          imageSources.workspaceThumbnail += 1
+        } else if (source === 'runtime-thumbnail') {
+          imageSources.runtimeThumbnail += 1
+        } else {
+          imageSources.original += 1
+        }
+
+        const previousSource = state.imageSourceByElement.get(image)
+        if (previousSource && previousSource !== source) {
+          state.imageSourceSwitchCount += 1
+        }
+        state.imageSourceByElement.set(image, source)
+      })
+
+      state.imageSourceSamples.push(imageSources)
       state.renderedNodeSamples.push(
         document.querySelectorAll('.react-flow__node').length,
       )
@@ -903,6 +951,8 @@ async function startBrowserSampler(page) {
         renderedEdgeSamples: state.renderedEdgeSamples,
         renderedImageSamples: state.renderedImageSamples,
         viewportZoomSamples: state.viewportZoomSamples,
+        imageSourceSamples: state.imageSourceSamples,
+        imageSourceSwitchCount: state.imageSourceSwitchCount,
         renderCounts: { ...(window.__AI_CANVAS_RENDER_COUNTS__ ?? {}) },
       }
     }
@@ -941,6 +991,7 @@ async function collectCanvasDomStats(page, targetNodeId) {
         renderedHeight: image.clientHeight,
         lowQualityPreview: image.getAttribute('data-low-quality-preview') === 'true',
         workspaceThumbnailPreview: image.getAttribute('data-workspace-thumbnail-preview') === 'true',
+        sourceType: image.getAttribute('data-canvas-image-source') ?? 'untracked',
       }))
 
     return {
@@ -950,6 +1001,8 @@ async function collectCanvasDomStats(page, targetNodeId) {
       renderedImages: document.querySelectorAll('.react-flow__node img').length,
       lowQualityImages: document.querySelectorAll('.react-flow__node img[data-low-quality-preview="true"]').length,
       workspaceThumbnailImages: document.querySelectorAll('.react-flow__node img[data-workspace-thumbnail-preview="true"]').length,
+      originalPreviewImages: document.querySelectorAll('.react-flow__node img[data-canvas-image-source="original"]').length,
+      runtimeThumbnailImages: document.querySelectorAll('.react-flow__node img[data-canvas-image-source="runtime-thumbnail"]').length,
       lowQualityPlaceholders: document.querySelectorAll('.react-flow__node img[data-low-quality-placeholder="true"]').length,
       targetRendered: Boolean(targetNode),
       targetImages: targetNode?.querySelectorAll('img').length ?? 0,
@@ -1170,13 +1223,37 @@ async function getViewportZoom(page) {
 async function moveMouseToPaneCenter(page) {
   const pane = page.locator('.react-flow__pane').first()
   await pane.waitFor({ state: 'visible', timeout: 15_000 })
-  const box = await pane.boundingBox()
-  if (!box) {
-    throw new Error('Unable to locate canvas pane bounds')
-  }
+  const { centerX, centerY } = await page.evaluate(() => {
+    const paneElement = document.querySelector('.react-flow__pane')
+    if (!paneElement) {
+      throw new Error('Unable to locate canvas pane bounds')
+    }
 
-  const centerX = box.x + box.width / 2
-  const centerY = box.y + box.height / 2
+    const box = paneElement.getBoundingClientRect()
+    const candidates = [
+      [0.5, 0.5],
+      [0.15, 0.2],
+      [0.85, 0.2],
+      [0.15, 0.8],
+      [0.85, 0.8],
+      [0.5, 0.12],
+      [0.5, 0.88],
+    ]
+
+    for (const [xRatio, yRatio] of candidates) {
+      const x = box.left + box.width * xRatio
+      const y = box.top + box.height * yRatio
+      const element = document.elementFromPoint(x, y)
+      if (!element?.closest('.react-flow__node, .react-flow__panel, .react-flow__controls')) {
+        return { centerX: x, centerY: y }
+      }
+    }
+
+    return {
+      centerX: box.left + Math.min(24, box.width / 2),
+      centerY: box.top + Math.min(24, box.height / 2),
+    }
+  })
   await page.mouse.move(centerX, centerY)
 
   return { centerX, centerY }
@@ -1190,7 +1267,12 @@ async function wheelTowardZoom(page, targetZoom, {
 } = {}) {
   let currentZoom = await getViewportZoom(page)
   for (let iteration = 0; iteration < maxIterations && Math.abs(currentZoom - targetZoom) > tolerance; iteration += 1) {
-    await page.mouse.wheel(0, currentZoom > targetZoom ? delta : -delta)
+    const targetRatio = Math.max(0.01, targetZoom) / Math.max(0.01, currentZoom)
+    const adaptiveDelta = Math.max(
+      4,
+      Math.min(delta, Math.round(Math.abs(Math.log2(targetRatio)) / 0.002)),
+    )
+    await page.mouse.wheel(0, currentZoom > targetZoom ? adaptiveDelta : -adaptiveDelta)
     await page.waitForTimeout(settleMs)
     currentZoom = await getViewportZoom(page)
   }
@@ -1201,6 +1283,13 @@ async function wheelTowardZoom(page, targetZoom, {
 async function prepareZoomGesture(page, options) {
   await moveMouseToPaneCenter(page)
   await wheelTowardZoom(page, options.zoomFrom, { tolerance: 0.02, maxIterations: 90, delta: 150 })
+  await page.waitForTimeout(160)
+  return waitForZoomImageQuality(page, options.zoomFrom)
+}
+
+async function preparePanZoomGesture(page, options) {
+  await moveMouseToPaneCenter(page)
+  await wheelTowardZoom(page, options.panZoom, { tolerance: 0.012, maxIterations: 90, delta: 150 })
   await page.waitForTimeout(160)
 }
 
@@ -1230,6 +1319,24 @@ async function runZoomGesture(page, options) {
   }
 
   await page.evaluate(() => window.__canvasDragPerfMarkDragStop?.())
+}
+
+async function waitForZoomImageQuality(page, targetZoom) {
+  const expectedSource = targetZoom >= 0.30
+    ? 'original'
+    : targetZoom <= 0.24
+      ? 'thumbnail'
+      : null
+  if (!expectedSource) return true
+
+  return page.waitForFunction((expected) => {
+    const images = Array.from(document.querySelectorAll('img[data-canvas-image-source]'))
+    if (images.length === 0) return false
+    return images.every((image) => {
+      const source = image.getAttribute('data-canvas-image-source')
+      return expected === 'original' ? source === 'original' : source !== 'original'
+    })
+  }, expectedSource, { timeout: ZOOM_IMAGE_QUALITY_TIMEOUT_MS }).then(() => true).catch(() => false)
 }
 
 function getAssetContentType(filePath) {
@@ -1343,11 +1450,18 @@ function aggregateRuns(runs) {
       maxFrameMs: median(summaries.map((summary) => summary.maxFrameMs)),
       framesOver16ms: median(summaries.map((summary) => summary.framesOver16ms)),
       framesOver32ms: median(summaries.map((summary) => summary.framesOver32ms)),
+      allFramesOver32ms: median(summaries.map((summary) => summary.allFramesOver32ms)),
       startupMaxFrameMs: median(summaries.map((summary) => summary.startupMaxFrameMs)),
       startupFramesOver32ms: median(summaries.map((summary) => summary.startupFramesOver32ms)),
       longTaskTotalMs: median(summaries.map((summary) => summary.longTaskTotalMs)),
       maxLowQualityPlaceholderCount: Math.max(...summaries.map((summary) => summary.maxLowQualityPlaceholderCount)),
       maxWorkspaceThumbnailPreviewCount: Math.max(...summaries.map((summary) => summary.maxWorkspaceThumbnailPreviewCount)),
+      imageSources: {
+        maxOriginal: Math.max(...summaries.map((summary) => summary.imageSources.maxOriginal)),
+        maxWorkspaceThumbnail: Math.max(...summaries.map((summary) => summary.imageSources.maxWorkspaceThumbnail)),
+        maxRuntimeThumbnail: Math.max(...summaries.map((summary) => summary.imageSources.maxRuntimeThumbnail)),
+        switches: median(summaries.map((summary) => summary.imageSources.switches)),
+      },
       renderedNodesDuringGesture: aggregateCountSummary(runs, 'renderedNodesDuringGesture'),
       renderedEdgesDuringGesture: aggregateCountSummary(runs, 'renderedEdgesDuringGesture'),
       renderedImagesDuringGesture: aggregateCountSummary(runs, 'renderedImagesDuringGesture'),
@@ -1595,11 +1709,21 @@ async function runSingleSample(context, baseUrl, options, workspaceScenario, tar
   ).then(() => true).catch(() => false)
   const domBeforeDrag = await collectCanvasDomStats(page, targetNodeId)
 
+  let imageQualityReadyBeforeGesture = true
   if (options.gesture === 'zoom') {
-    await prepareZoomGesture(page, options)
-  } else if (options.gesture === 'select-pan') {
+    imageQualityReadyBeforeGesture = await prepareZoomGesture(page, options)
+  } else if (options.gesture === 'pan' || options.gesture === 'select-pan') {
+    await preparePanZoomGesture(page, options)
+    imageQualityReadyBeforeGesture = await waitForZoomImageQuality(page, options.panZoom)
+  }
+  if (options.gesture === 'select-pan') {
     await prepareSelectPanGesture(page, targetNodeId)
   }
+  if (options.gesture === 'pan' || options.gesture === 'select-pan') {
+    await page.waitForTimeout(PAN_PREVIEW_SETTLE_MS)
+  }
+
+  const zoomBeforeGesture = await getViewportZoom(page)
 
   const performanceBeforeDrag = await collectPerformanceMetrics(cdpSession)
   let traceSummary = createEmptyTraceSummary()
@@ -1624,7 +1748,11 @@ async function runSingleSample(context, baseUrl, options, workspaceScenario, tar
   } else {
     await runDragGesture(page, options, targetNodeId)
   }
-  await page.waitForTimeout(240)
+  const zoomAfterGesture = await getViewportZoom(page)
+  const imageQualityReadyAfterGesture = options.gesture === 'zoom'
+    ? await waitForZoomImageQuality(page, options.zoomTo)
+    : true
+  await page.waitForTimeout(options.gesture === 'zoom' ? ZOOM_PREVIEW_SETTLE_MS : 240)
   const samples = await stopBrowserSampler(page)
   if (traceStarted) {
     try {
@@ -1638,8 +1766,40 @@ async function runSingleSample(context, baseUrl, options, workspaceScenario, tar
   const performanceAfterDrag = await collectPerformanceMetrics(cdpSession)
   const domAfterDrag = await collectCanvasDomStats(page, targetNodeId)
   const summary = summarize(samples)
-  const budget = evaluateBudget(summary, { workspaceMode: Boolean(workspaceScenario) })
+  const nodeCount = workspaceScenario?.project.workingSnapshot.canvas.nodes.length ?? options.imageCount
+  const imageCount = workspaceScenario?.assetStats.length ?? options.imageCount
+  const budgetProfile = getCanvasPerformanceBudget({ nodeCount, imageCount, gesture: options.gesture })
+  const metricBudget = evaluateCanvasPerformanceBudget(summary, budgetProfile)
+  const measuredValidity = validateCanvasPerformanceSample({
+    gesture: options.gesture,
+    zoomBefore: zoomBeforeGesture,
+    zoomAfter: zoomAfterGesture,
+    zoomChanges: summary.viewportZoomDuringGesture.changes,
+    zoomFrom: options.zoomFrom,
+    zoomTo: options.zoomTo,
+    panZoom: options.panZoom,
+  })
+  const imageQualityFailures = [
+    ...(!imageQualityReadyBeforeGesture ? ['image preview quality did not settle before gesture'] : []),
+    ...(!imageQualityReadyAfterGesture ? ['image preview quality did not settle after zoom'] : []),
+  ]
+  const validity = imageQualityFailures.length === 0
+    ? measuredValidity
+    : {
+        valid: false,
+        failures: [...measuredValidity.failures, ...imageQualityFailures],
+      }
+  const budget = {
+    ...metricBudget,
+    passed: metricBudget.passed && validity.valid,
+    failures: [...validity.failures, ...metricBudget.failures],
+  }
   const performanceDelta = diffPerformanceMetrics(performanceBeforeDrag, performanceAfterDrag)
+  const viewportEnvironment = await page.evaluate(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    devicePixelRatio: window.devicePixelRatio,
+  }))
 
   await cdpSession.detach()
   await page.close()
@@ -1649,7 +1809,20 @@ async function runSingleSample(context, baseUrl, options, workspaceScenario, tar
     environment: {
       thumbnailReadyBeforeDrag: thumbnailReady,
       browserDiagnostics,
+      viewport: viewportEnvironment,
     },
+    validity,
+    viewportZoom: {
+      before: zoomBeforeGesture,
+      after: zoomAfterGesture,
+      target: options.gesture === 'zoom'
+        ? options.zoomTo
+        : options.gesture === 'pan' || options.gesture === 'select-pan'
+          ? options.panZoom
+          : null,
+    },
+    imageQualityReadyAfterGesture,
+    imageQualityReadyBeforeGesture,
     dom: {
       beforeDrag: domBeforeDrag,
       afterDrag: domAfterDrag,
@@ -1723,7 +1896,20 @@ async function main() {
     }
     const aggregate = aggregateRuns(runs)
     const summary = aggregate.median
-    const budget = evaluateBudget(summary, { workspaceMode: Boolean(workspaceScenario) })
+    const nodeCount = workspaceScenario?.project.workingSnapshot.canvas.nodes.length ?? options.imageCount
+    const imageCount = workspaceScenario?.assetStats.length ?? options.imageCount
+    const budgetProfile = getCanvasPerformanceBudget({ nodeCount, imageCount, gesture: options.gesture })
+    const aggregateMetricBudget = evaluateCanvasPerformanceBudget(summary, budgetProfile)
+    const runFailures = runs.flatMap((run) => (
+      run.budget.passed
+        ? []
+        : run.budget.failures.map((failure) => `run #${run.runIndex}: ${failure}`)
+    ))
+    const budget = {
+      ...aggregateMetricBudget,
+      passed: aggregateMetricBudget.passed && runFailures.length === 0,
+      failures: [...aggregateMetricBudget.failures, ...runFailures],
+    }
     const domBeforeDrag = runs[0]?.dom.beforeDrag ?? null
     const report = {
       scenario: {
@@ -1733,7 +1919,8 @@ async function main() {
         projectId: workspaceScenario?.project.id ?? null,
         projectName: workspaceScenario?.project.name ?? null,
         targetNodeId,
-        imageCount: options.imageCount,
+        imageCount,
+        nodeCount,
         imageWidth: options.imageWidth,
         imageHeight: options.imageHeight,
         dragDistance: options.dragDistance,
@@ -1741,6 +1928,7 @@ async function main() {
         zoomFrom: options.zoomFrom,
         zoomTo: options.zoomTo,
         zoomSteps: options.zoomSteps,
+        panZoom: options.panZoom,
         runs: options.runs,
         gesture: options.gesture,
         forceCulling: options.forceCulling,
@@ -1753,8 +1941,10 @@ async function main() {
       },
       environment: {
         nodeVersion: process.version,
+        browserVersion: browser.version(),
         url: baseUrl,
         serverMode: options.serverMode,
+        viewport: runs[0]?.environment.viewport ?? null,
       },
       dom: runs[0]?.dom ?? null,
       workspace: workspaceScenario
@@ -1791,6 +1981,7 @@ async function main() {
     console.log(`  canvas performance mode: ${options.canvasPerformanceMode || 'default'}`)
     console.log(`  visible-element culling: ${options.forceCulling}`)
     console.log(`  internal drag: ${options.enableInternalDrag ? 'on' : 'off'}`)
+    console.log(`  budget profile: ${budget.profile.name}`)
     if (workspaceScenario) {
       console.log(`  project: ${workspaceScenario.project.name} (${workspaceScenario.project.id})`)
       console.log(`  nodes/assets: ${workspaceScenario.project.workingSnapshot.canvas.nodes.length} nodes, ${workspaceScenario.assetStats.length} image asset refs, ${workspaceScenario.assetStats.filter((asset) => asset.hasThumbnail).length} thumbnail refs`)
@@ -1804,7 +1995,7 @@ async function main() {
     console.log(`  median p95 frame: ${summary.p95FrameMs.toFixed(2)}ms`)
     console.log(`  median max frame: ${summary.maxFrameMs.toFixed(2)}ms`)
     console.log(`  median frames >16.7ms: ${summary.framesOver16ms}`)
-    console.log(`  median frames >32ms: ${summary.framesOver32ms}`)
+    console.log(`  median active/all frames >32ms: ${summary.framesOver32ms}/${summary.allFramesOver32ms}`)
     console.log(`  first 300ms max frame / frames >32ms: ${summary.startupMaxFrameMs.toFixed(2)}ms / ${summary.startupFramesOver32ms}`)
     console.log(`  median long task total: ${summary.longTaskTotalMs.toFixed(2)}ms`)
     console.log(`  median Chrome task/script/layout/style: ${aggregate.performanceDelta.taskDurationMs.toFixed(2)}ms / ${aggregate.performanceDelta.scriptDurationMs.toFixed(2)}ms / ${aggregate.performanceDelta.layoutDurationMs.toFixed(2)}ms / ${aggregate.performanceDelta.recalcStyleDurationMs.toFixed(2)}ms`)
@@ -1821,6 +2012,7 @@ async function main() {
     }
     console.log(`  max low-quality placeholders: ${summary.maxLowQualityPlaceholderCount}`)
     console.log(`  max workspace thumbnail hits: ${summary.maxWorkspaceThumbnailPreviewCount}`)
+    console.log(`  image sources original/workspace/runtime/switches: ${summary.imageSources.maxOriginal}/${summary.imageSources.maxWorkspaceThumbnail}/${summary.imageSources.maxRuntimeThumbnail}/${summary.imageSources.switches}`)
     if (aggregate.best && aggregate.worst) {
       console.log(`  best run: #${aggregate.best.runIndex} avg ${aggregate.best.summary.averageFrameMs.toFixed(2)}ms, p95 ${aggregate.best.summary.p95FrameMs.toFixed(2)}ms`)
       console.log(`  worst run: #${aggregate.worst.runIndex} avg ${aggregate.worst.summary.averageFrameMs.toFixed(2)}ms, p95 ${aggregate.worst.summary.p95FrameMs.toFixed(2)}ms`)

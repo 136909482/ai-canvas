@@ -27,40 +27,49 @@
 - 节点浮动工具条只在节点已选中时挂载，由 `StableNodeToolbar` 处理单选显隐；平移时直接同步工具条 transform，不让 React 订阅每一帧 viewport 变化。不要通过 React Context 向全部节点广播选择数量，否则点击一个节点会让所有图片节点同步重渲染。
 - 用户可见的背景、MiniMap、边动画、阴影只在手动性能模式或有明确测量依据时降级。
 
-## 图片密集画布低缩放卡顿修复计划
+## 图片密集画布低缩放 LOD
 
 ### 复现基线
 
-真实图片密集工作区在 44 个节点、40 条边、41 个图片资源的规模下，原图文件合计约 `78.14 MB`，对应缩略图合计约 `0.59 MB`。默认画质模式从 `20%` 缩放到 `16.67%` 时，平均帧约 `18.47-18.98 ms`、p95 约 `33.3 ms`；在 `16.67%` 平移时会重复出现 `> 32 ms` 帧。相同缩放比例使用缩略图后，平移 p95 恢复到 `16.7-16.8 ms`，没有重复 `> 32 ms` 帧。
+真实图片密集工作区当前为 45 个节点、42 条边、41 个图片资源，原图文件合计约 `78.14 MB`，对应缩略图合计约 `0.59 MB`。优化前的 44 节点快照在默认画质模式从 `20%` 缩放到 `16.67%` 时，平均帧约 `18.47-18.98 ms`、p95 约 `33.3 ms`；在 `16.67%` 平移时会重复出现 `> 32 ms` 帧。
 
-本轮目标：
+最终 production preview 基线在当前工作区各跑 3 轮：`16.67%` 平移平均帧约 `16.83 ms`、p95 `16.80 ms`，每轮最多 1 个孤立 `> 32 ms` 帧；`80% -> 16%` 缩放平均帧约 `16.67 ms`、p95 `16.70 ms`；`16% -> 35%` 恢复原图平均帧约 `16.67 ms`、p95 `16.80 ms`。双向缩放活动交互均无 `> 32 ms` 帧，43 个实际图片 DOM 均完成目标源切换且没有白色占位。
+
+持续目标：
 
 - 图片密集画布在 `16%-20%` 缩放区间平移和缩放时，平均帧 `<= 17 ms`、p95 `<= 16.8 ms`，不重复出现 `> 32 ms` 帧。
 - 图片始终可见，不使用白色占位，不改变持久化数据，也不自动切换全局画布性能模式。
 - 低缩放优化只在跨越质量阈值时更新一次，不向全部节点广播每一帧 viewport 状态。
 - 放大后恢复原图清晰度，图片源切换不能抖动、闪白或重复解码。
 
-### 阶段 0：修正测量基线
+### 测量契约
 
-1. 修复 `scripts/canvasDragPerf.mjs` 的 zoom 手势，使采样必须实际改变 viewport zoom；当 `viewportZoomDuringGesture.changes === 0` 或未到达目标范围时直接判定样本无效。
-2. 为 pan/select-pan 增加明确的预置缩放参数，能够稳定复现 `16.67%` 平移，而不是依赖 `fitView` 的偶然结果。
-3. 报告记录缩放前后值、图片源类型、原图/缩略图命中数和切换次数，并增加脚本级测试覆盖无效缩放样本。
+- `scripts/canvasPerfContract.mjs` 是性能预算和样本有效性的单一事实来源。图片密集拖动、平移和缩放统一使用活动交互平均帧 `<= 17 ms`、p95 `<= 16.8 ms`、活动交互 `> 32 ms` 帧最多 1 个且不得重复的预算；`allFramesOver32ms` 额外记录交互结束后的资源恢复成本，不与交互预算混算。
+- zoom 样本必须实际到达 `--zoom-from` 与 `--zoom-to`，且 `viewportZoomDuringGesture.changes > 0`；否则即使帧指标达标也判为无效。
+- pan/select-pan 使用 `--pan-zoom` 显式预置缩放，默认值为 `0.1667`，不依赖 `fitView` 的偶然结果。
+- 多轮采样要求每一轮均有效且达标，不能用聚合中位数掩盖单轮失败。
+- production preview 的固定浏览器 profile 为 `1440x960`、DPR 1；报告同时记录 Node、Chromium、viewport、缩放前后值、图片源分布和切换次数。
+- `output/performance/` 报告用于本地证据且被 Git 忽略。可提交的合成场景负责自动回归，真实工作区负责最终本机验收。
 
-验收：连续 3 轮测试均到达目标缩放，报告不再出现“zoom changes 为 0 但预算通过”。
+脚本级测试必须覆盖“zoom changes 为 0”“未达到目标缩放”和旧版宽松 p95 预算不能通过。
 
-### 阶段 1：实现低缩放图片 LOD
+### LOD 实现规则
 
-1. 在 `CanvasFlowLayer` 内根据 viewport zoom 和图片密度计算离散的预览质量档位，只在跨越阈值时更新状态。
-2. 默认候选阈值为缩小到 `<= 0.24` 时使用工作区缩略图，放大到 `>= 0.30` 时恢复原图；使用滞回区间避免在阈值附近反复切换。
-3. 通过 `CanvasPerformanceContext` 传递离散档位，`CanvasImagePreview` 继续复用现有工作区缩略图、运行时缓存和原图回退链路。
-4. 项目加载后提前解析已有缩略图 URL；切换前保持当前图片，目标图片完成解码后再替换，禁止空白中间态。
-5. 该策略属于局部图片 LOD，不修改用户选择的 `canvasPerformanceMode`，也不降低文本、节点操作或持久化数据质量。
+- 图片密度明确使用 `getCanvasImagePerformanceStats().imageNodeCount`，达到 8 个图片/预览节点后启用自动 LOD；不读取 DOM，也不把每帧 viewport 广播到节点。
+- `CanvasFlowLayer` 在缩小到 `<= 0.24` 时切到 `thumbnail`，放大到 `>= 0.30` 时恢复 `full`，中间使用滞回区间保持当前档位。
+- `CanvasPerformanceContext` 只传递离散档位。手动性能模式、节点显式 `forceLowQualityPreview` 和关闭高清预览仍优先强制缩略图。
+- `CanvasImagePreview` 的候选顺序为工作区缩略图、运行时缩略图、原图。当前图片持续显示，候选图片在独立 `Image` 中完成加载和 decode 后才原子替换。
+- 快速反向跨越阈值会取消旧候选的提交；候选加载失败时保留最后成功图片。图片源类型通过 `data-canvas-image-source` 暴露给性能诊断。
+- 节点拖动和 viewport 交互期间暂停后台运行时缩略图生成，交互结束后恢复；暂停状态只保存在 `CanvasFlowLayer` ref 中，不广播给图片组件。
+- 缩略图恢复原图只在 viewport 交互完全结束后提交；原图与缩略图之间的源类型切换统一通过全局单路解码队列逐张完成，避免批量解码和同帧提交。
+- 小型图片密集稳定画布只为当前缩略图建立合成层；真实工作区对照证明该策略能降低首次平移峰值，原图不提升图层以避免放大显存占用。
+- 该策略不修改 `canvasPerformanceMode`、持久化数据或文本/节点交互质量。
 
-验收：真实 41 图场景在 `16.67%` 平移和双向缩放均满足预算；放大到 `>= 30%` 后恢复原图，缩放阈值附近往返 10 次不闪白、不抖动。
+真实 41 图场景仍需在 `16.67%` 平移和双向缩放各跑 3 轮；放大到 `>= 30%` 后必须恢复原图，阈值附近往返 10 次不得闪白或抖动。
 
-### 阶段 2：按数据削减剩余合成成本
+### 按数据削减剩余合成成本
 
-阶段 1 达标后不继续降级。若仍有重复 `> 32 ms` 帧，按以下顺序单项对照，每项都必须有独立报告：
+LOD 达标后不继续降级。若真实工作区仍有重复 `> 32 ms` 帧，按以下顺序单项对照，每项都必须有独立报告：
 
 1. viewport 交互期间暂停 MiniMap 重绘，交互结束后恢复，不卸载 MiniMap。
 2. 检查背景网格、边路径和节点阴影的 paint/composite 成本，仅在低缩放且正在交互时应用局部样式。
@@ -68,12 +77,12 @@
 
 验收：只保留能稳定改善 p95 且没有视觉回归的策略，删除无收益的诊断分支。
 
-### 阶段 3：回归与交付
+### 回归矩阵
 
-1. 自动覆盖默认画质、性能模式、原图缺少缩略图、缩略图加载失败、快速跨越阈值和缩放后立即平移。
-2. 在真实工作区与 20、80、300 个混合节点的合成场景各跑 3 轮，保存质量模式与性能模式对照报告。
+1. 自动覆盖默认画质、性能模式、稀疏图片画布、原图缺少缩略图、缩略图加载失败、快速跨越阈值和缩放后立即平移。
+2. 在真实工作区与 20、80、300 个节点的合成场景各跑 3 轮，保存质量模式与性能模式对照报告。
 3. 浏览器手动检查图片连续可见、MiniMap/背景状态、节点选择、拖动、连线、撤销和项目保存。
-4. 运行 `npm run test`、`npm run lint`、`npm run build`、真实工作区性能采样和浏览器冒烟。
+4. 运行 `npm run test`、`npm run lint`、`npm run build`、真实工作区性能采样和 `npm run test:smoke`。
 
 完成定义：自动预算和手动视觉回归全部通过，zoom 采样能够证明视口真实变化，默认画质模式在低缩放下不再周期性掉到约 30 FPS。
 
@@ -137,8 +146,9 @@ npm run perf:canvas:enforce
 
 ```bash
 npm run perf:canvas -- --image-count 6 --image-width 3000 --image-height 2200
-npm run perf:canvas -- --runs 3 --gesture zoom --zoom-from 0.8 --zoom-to 0.24
-npm run perf:canvas -- --workspace-dir <工作区路径> --project-name <项目名> --gesture select-pan --runs 3
+npm run perf:canvas -- --server-mode preview --runs 3 --gesture zoom --zoom-from 0.8 --zoom-to 0.16
+npm run perf:canvas -- --server-mode preview --gesture pan --pan-zoom 0.1667 --runs 3
+npm run perf:canvas -- --server-mode preview --workspace-dir <工作区路径> --project-name <项目名> --gesture select-pan --pan-zoom 0.1667 --runs 3
 npm run perf:canvas -- --server-mode preview --canvas-performance-mode performance --runs 1
 npm run perf:canvas -- --headed
 ```
@@ -152,6 +162,10 @@ npm run perf:canvas -- --headed
 - `summary.longTaskTotalMs`
 - `summary.maxLowQualityPlaceholderCount`
 - `summary.maxWorkspaceThumbnailPreviewCount`
+- `summary.imageSources`
+- `runs[].validity`
+- `runs[].viewportZoom`
+- `budget.profile`
 - `aggregate.renderCounts`
 - `aggregate.traceSummary`
 

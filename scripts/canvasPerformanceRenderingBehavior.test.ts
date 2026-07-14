@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  CANVAS_IMAGE_LOD_ENTER_ZOOM,
+  CANVAS_IMAGE_LOD_EXIT_ZOOM,
   EMBEDDED_IMAGE_PERFORMANCE_BYTE_LIMIT,
   getCanvasImagePerformanceStats,
+  getCanvasImagePreviewQuality,
   shouldUseCanvasPerformanceRendering,
 } from '../src/features/canvasPerformance/rendering.ts'
 
@@ -90,4 +93,32 @@ test('keeps quality rendering for a small canvas with one group while idle', () 
   assert.equal(shouldUseCanvasPerformanceRendering({
     canvasPerformanceMode: 'quality',
   }), false)
+})
+
+test('uses a hysteresis band for image-dense low-zoom previews', () => {
+  assert.equal(getCanvasImagePreviewQuality({
+    currentQuality: 'full',
+    zoom: CANVAS_IMAGE_LOD_ENTER_ZOOM,
+    imageCount: 8,
+  }), 'thumbnail')
+
+  assert.equal(getCanvasImagePreviewQuality({
+    currentQuality: 'thumbnail',
+    zoom: 0.27,
+    imageCount: 8,
+  }), 'thumbnail')
+
+  assert.equal(getCanvasImagePreviewQuality({
+    currentQuality: 'thumbnail',
+    zoom: CANVAS_IMAGE_LOD_EXIT_ZOOM,
+    imageCount: 8,
+  }), 'full')
+})
+
+test('does not enable automatic LOD for a sparse image canvas', () => {
+  assert.equal(getCanvasImagePreviewQuality({
+    currentQuality: 'thumbnail',
+    zoom: 0.1,
+    imageCount: 7,
+  }), 'full')
 })

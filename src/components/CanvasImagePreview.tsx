@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from 'react'
 import { useCanvasPerformanceContext } from '@/components/CanvasPerformanceContext'
 import {
   cacheThumbnail,
+  decodeImageSource,
   getCachedThumbnailUrl,
   isAbortError,
   isDirectThumbnailUrl,
@@ -34,17 +35,17 @@ export const CanvasImagePreview = memo(function CanvasImagePreview({
   recordComponentRender('CanvasImagePreview')
   const highQualityPreviewEnabled = useSettingsStore((state) => state.config.storage.lowQualityPreviewEnabled)
   const canvasPerformanceMode = useSettingsStore((state) => state.config.storage.canvasPerformanceMode)
-  const { forceLowQualityImages } = useCanvasPerformanceContext()
+  const { forceLowQualityImages, imagePreviewQuality } = useCanvasPerformanceContext()
   const shouldUseLowQualityPreview = (
     forceLowQualityPreview
     || forceLowQualityImages
+    || imagePreviewQuality === 'thumbnail'
     || canvasPerformanceMode === 'performance'
     || !highQualityPreviewEnabled
   )
 
   return (
     <CanvasImagePreviewInner
-      key={`${src}\u0000${imageAsset?.thumbnailRelativePath ?? ''}`}
       src={src}
       alt={alt}
       imageAsset={imageAsset}
@@ -71,16 +72,46 @@ function CanvasImagePreviewInner({
   const persistentThumbnailRelativePath = typeof imageAsset?.thumbnailRelativePath === 'string'
     ? imageAsset.thumbnailRelativePath
     : ''
-  const [thumbnailSrc, setThumbnailSrc] = useState(() => getCachedThumbnailUrl(src))
-  const [persistentThumbnailSrc, setPersistentThumbnailSrc] = useState<string | null>(() => (
-    persistentThumbnailRelativePath && isDirectThumbnailUrl(persistentThumbnailRelativePath)
-      ? persistentThumbnailRelativePath
-      : null
-  ))
-  const [persistentThumbnailUnavailable, setPersistentThumbnailUnavailable] = useState(false)
-  const renderedSrc = shouldUseLowQualityPreview
-    ? persistentThumbnailSrc ?? thumbnailSrc ?? src
+  const directPersistentThumbnailSrc = persistentThumbnailRelativePath
+    && isDirectThumbnailUrl(persistentThumbnailRelativePath)
+    ? persistentThumbnailRelativePath
+    : null
+  const [persistentThumbnailState, setPersistentThumbnailState] = useState<{
+    path: string
+    url: string | null
+    unavailable: boolean
+  }>(() => ({
+    path: persistentThumbnailRelativePath,
+    url: directPersistentThumbnailSrc,
+    unavailable: false,
+  }))
+  const [runtimeThumbnailState, setRuntimeThumbnailState] = useState<{
+    source: string
+    url: string | null
+  }>(() => ({ source: src, url: getCachedThumbnailUrl(src) }))
+  const persistentThumbnailSrc = directPersistentThumbnailSrc
+    ?? (persistentThumbnailState.path === persistentThumbnailRelativePath
+      ? persistentThumbnailState.url
+      : null)
+  const persistentThumbnailUnavailable = Boolean(persistentThumbnailRelativePath)
+    && !directPersistentThumbnailSrc
+    && persistentThumbnailState.path === persistentThumbnailRelativePath
+    && persistentThumbnailState.unavailable
+  const runtimeThumbnailSrc = runtimeThumbnailState.source === src
+    ? runtimeThumbnailState.url
+    : getCachedThumbnailUrl(src)
+  const desiredSourceSrc = shouldUseLowQualityPreview
+    ? persistentThumbnailSrc ?? runtimeThumbnailSrc ?? src
     : src
+  const desiredSourceType = shouldUseLowQualityPreview && persistentThumbnailSrc
+    ? 'workspace-thumbnail'
+    : shouldUseLowQualityPreview && runtimeThumbnailSrc && runtimeThumbnailSrc !== src
+      ? 'runtime-thumbnail'
+      : 'original'
+  const [renderedSource, setRenderedSource] = useState<{
+    src: string
+    type: 'original' | 'workspace-thumbnail' | 'runtime-thumbnail'
+  }>(() => ({ src, type: 'original' }))
 
   useEffect(() => {
     if (!persistentThumbnailRelativePath || isDirectThumbnailUrl(persistentThumbnailRelativePath)) {
@@ -92,7 +123,11 @@ function CanvasImagePreviewInner({
       try {
         const resolvedUrl = await platformBridge.resolveWorkspaceAssetUrl(persistentThumbnailRelativePath)
         if (!cancelled) {
-          setPersistentThumbnailSrc(resolvedUrl)
+          setPersistentThumbnailState({
+            path: persistentThumbnailRelativePath,
+            url: resolvedUrl,
+            unavailable: false,
+          })
         }
       } catch {
         if (imageAsset?.relativePath && imageAsset.fileName) {
@@ -110,8 +145,11 @@ function CanvasImagePreviewInner({
             const restoredUrl = await platformBridge.resolveWorkspaceAssetUrl(persistentThumbnailRelativePath)
 
             if (!cancelled) {
-              setPersistentThumbnailSrc(restoredUrl)
-              setPersistentThumbnailUnavailable(false)
+              setPersistentThumbnailState({
+                path: persistentThumbnailRelativePath,
+                url: restoredUrl,
+                unavailable: false,
+              })
             }
             return
           } catch {
@@ -120,8 +158,11 @@ function CanvasImagePreviewInner({
         }
 
         if (!cancelled) {
-          setPersistentThumbnailSrc(null)
-          setPersistentThumbnailUnavailable(true)
+          setPersistentThumbnailState({
+            path: persistentThumbnailRelativePath,
+            url: null,
+            unavailable: true,
+          })
         }
       }
     }
@@ -150,7 +191,7 @@ function CanvasImagePreviewInner({
             return
           }
 
-          setThumbnailSrc(nextThumbnailSrc)
+          setRuntimeThumbnailState({ source: src, url: nextThumbnailSrc })
         })
         .catch((error) => {
           if (cancelled) {
@@ -162,7 +203,7 @@ function CanvasImagePreviewInner({
           }
 
           cacheThumbnail(src, src)
-          setThumbnailSrc(src)
+          setRuntimeThumbnailState({ source: src, url: src })
         })
     })
 
@@ -172,16 +213,43 @@ function CanvasImagePreviewInner({
     }
   }, [persistentThumbnailRelativePath, persistentThumbnailUnavailable, src])
 
+  useEffect(() => {
+    if (
+      !desiredSourceSrc
+      || (renderedSource.src === desiredSourceSrc && renderedSource.type === desiredSourceType)
+    ) {
+      return
+    }
+
+    let cancelled = false
+    void decodeImageSource(desiredSourceSrc, {
+      serialized: desiredSourceType !== renderedSource.type,
+    })
+      .then(() => {
+        if (!cancelled) {
+          setRenderedSource({ src: desiredSourceSrc, type: desiredSourceType })
+        }
+      })
+      .catch(() => undefined)
+
+    return () => {
+      cancelled = true
+    }
+  }, [desiredSourceSrc, desiredSourceType, renderedSource.src, renderedSource.type])
+
+  const isLowQualitySource = renderedSource.type !== 'original'
+
   return (
     <img
-      src={renderedSrc}
+      src={renderedSource.src}
       alt={alt}
       className={className}
       draggable={draggable}
       loading="lazy"
       decoding="async"
-      data-low-quality-preview={shouldUseLowQualityPreview && (persistentThumbnailSrc ?? thumbnailSrc) ? 'true' : undefined}
-      data-workspace-thumbnail-preview={shouldUseLowQualityPreview && persistentThumbnailSrc ? 'true' : undefined}
+      data-canvas-image-source={renderedSource.type}
+      data-low-quality-preview={isLowQualitySource ? 'true' : undefined}
+      data-workspace-thumbnail-preview={renderedSource.type === 'workspace-thumbnail' ? 'true' : undefined}
     />
   )
 }

@@ -14,6 +14,7 @@ release
 output
 test-results
 .playwright-cli
+.playwright-browsers
 *.local
 
 # Editor directories and files

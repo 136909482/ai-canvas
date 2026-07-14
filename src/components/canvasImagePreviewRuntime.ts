@@ -1,6 +1,8 @@
 const LOW_QUALITY_PREVIEW_MAX_SIZE = 512
 const MAX_THUMBNAIL_CACHE_ENTRIES = 80
 const MAX_CONCURRENT_THUMBNAIL_JOBS = 1
+const MAX_CONCURRENT_IMAGE_SOURCE_DECODES = 1
+const MAX_DECODED_IMAGE_SOURCE_ENTRIES = 160
 const THUMBNAIL_PREWARM_DELAY_MS = 1200
 
 type ThumbnailCacheEntry = {
@@ -9,6 +11,11 @@ type ThumbnailCacheEntry = {
 }
 
 type ThumbnailJob = {
+  start: () => void
+  reject: (error: unknown) => void
+}
+
+type ImageDecodeJob = {
   start: () => void
   reject: (error: unknown) => void
 }
@@ -22,8 +29,11 @@ const thumbnailCache = new Map<string, ThumbnailCacheEntry>()
 const thumbnailRequests = new Map<string, Promise<string>>()
 const thumbnailJobQueue: ThumbnailJob[] = []
 const activeThumbnailControllers = new Set<AbortController>()
+const decodedImageSourceRequests = new Map<string, Promise<void>>()
+const imageDecodeJobQueue: ImageDecodeJob[] = []
 let activeThumbnailJobs = 0
 let thumbnailQueuePauseCount = 0
+let activeImageDecodeJobs = 0
 
 export function getCachedThumbnailUrl(src: string) {
   return thumbnailCache.get(src)?.url ?? null
@@ -64,6 +74,12 @@ export function clearCanvasImagePreviewCache() {
   thumbnailCache.clear()
   thumbnailRequests.clear()
   thumbnailJobQueue.length = 0
+  decodedImageSourceRequests.clear()
+
+  const abortError = new DOMException('Image decode aborted', 'AbortError')
+  while (imageDecodeJobQueue.length > 0) {
+    imageDecodeJobQueue.shift()?.reject(abortError)
+  }
 
   for (const controller of activeThumbnailControllers) {
     controller.abort()
@@ -164,6 +180,102 @@ export function isDirectThumbnailUrl(value: string) {
     || value.startsWith('https://')
     || value.startsWith('/')
   )
+}
+
+function performImageSourceDecode(src: string) {
+  return new Promise<void>((resolve, reject) => {
+    const image = new Image()
+    let settled = false
+
+    const cleanup = () => {
+      image.onload = null
+      image.onerror = null
+    }
+    const finishResolve = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve()
+    }
+    const finishReject = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(new Error('Failed to decode image preview source'))
+    }
+
+    image.decoding = 'async'
+    image.onload = () => {
+      if (typeof image.decode !== 'function') {
+        finishResolve()
+        return
+      }
+
+      void image.decode().then(finishResolve).catch(() => {
+        if (image.complete && image.naturalWidth > 0) {
+          finishResolve()
+          return
+        }
+        finishReject()
+      })
+    }
+    image.onerror = finishReject
+    image.src = src
+  })
+}
+
+function runNextImageDecodeJob() {
+  while (activeImageDecodeJobs < MAX_CONCURRENT_IMAGE_SOURCE_DECODES) {
+    const nextJob = imageDecodeJobQueue.shift()
+    if (!nextJob) return
+    activeImageDecodeJobs += 1
+    nextJob.start()
+  }
+}
+
+function enqueueImageSourceDecode(src: string) {
+  return new Promise<void>((resolve, reject) => {
+    imageDecodeJobQueue.push({
+      reject,
+      start: () => {
+        void performImageSourceDecode(src)
+          .then(resolve)
+          .catch(reject)
+          .finally(() => {
+            activeImageDecodeJobs -= 1
+            runNextImageDecodeJob()
+          })
+      },
+    })
+    runNextImageDecodeJob()
+  })
+}
+
+export function decodeImageSource(src: string, options?: { serialized?: boolean }) {
+  if (!options?.serialized) {
+    return performImageSourceDecode(src)
+  }
+
+  const cachedRequest = decodedImageSourceRequests.get(src)
+  if (cachedRequest) {
+    return cachedRequest
+  }
+
+  const request = enqueueImageSourceDecode(src).catch((error) => {
+    if (decodedImageSourceRequests.get(src) === request) {
+      decodedImageSourceRequests.delete(src)
+    }
+    throw error
+  })
+  decodedImageSourceRequests.set(src, request)
+
+  while (decodedImageSourceRequests.size > MAX_DECODED_IMAGE_SOURCE_ENTRIES) {
+    const oldestSource = decodedImageSourceRequests.keys().next().value
+    if (!oldestSource) break
+    decodedImageSourceRequests.delete(oldestSource)
+  }
+
+  return request
 }
 
 function canvasToThumbnailUrl(canvas: HTMLCanvasElement, signal: AbortSignal) {
