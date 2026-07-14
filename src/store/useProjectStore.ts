@@ -77,9 +77,9 @@ interface ProjectStore {
   getActivePersistenceStatus: () => ProjectPersistenceStatus
 }
 
-async function restoreProjectWorkspace(snapshot: ProjectSnapshot) {
+async function restoreProjectWorkspace(snapshot: ProjectSnapshot, projectId: string) {
   platformBridge.clearWorkspaceAssetUrlCache()
-  replaceWorkspaceSnapshot(snapshot)
+  replaceWorkspaceSnapshot(snapshot, projectId)
   useHistoryStore.getState().clearHistory()
   await resolveWorkspaceNodeAssetUrls()
   await restoreTaskQueueAfterSnapshotLoad()
@@ -185,7 +185,7 @@ export const useProjectStore = create<ProjectStore>()((set, get) => {
           isReady: false,
         })
 
-        await restoreProjectWorkspace(openedProject.workingSnapshot)
+        await restoreProjectWorkspace(openedProject.workingSnapshot, openedProject.id)
         set({ isReady: true })
 
         void persistWorkspaceProjectIfConfigured(openedProject, {
@@ -245,7 +245,7 @@ export const useProjectStore = create<ProjectStore>()((set, get) => {
       isReady: false,
     })
 
-    await restoreProjectWorkspace(fallbackProject.workingSnapshot)
+    await restoreProjectWorkspace(fallbackProject.workingSnapshot, fallbackProject.id)
     set({ isReady: true })
   }
 
@@ -320,7 +320,7 @@ export const useProjectStore = create<ProjectStore>()((set, get) => {
     try {
       const stats = { thumbnailBackfillCount: 0 }
       const snapshot = sanitizeProjectSnapshotForPersistence(
-        await migrateSnapshotEmbeddedImageAssets(takeWorkspaceSnapshot(), { updateLiveCanvas: true, stats }),
+        await migrateSnapshotEmbeddedImageAssets(takeWorkspaceSnapshot(), { projectId, updateLiveCanvas: true, stats }),
       )
       await platformBridge.saveWorkspaceProject({
         project: sanitizeProjectRecordForPersistence({
@@ -387,7 +387,7 @@ export const useProjectStore = create<ProjectStore>()((set, get) => {
     try {
       const stats = { thumbnailBackfillCount: 0 }
       const snapshot = sanitizeProjectSnapshotForPersistence(
-        await migrateSnapshotEmbeddedImageAssets(takeWorkspaceSnapshot(), { updateLiveCanvas: true, stats }),
+        await migrateSnapshotEmbeddedImageAssets(takeWorkspaceSnapshot(), { projectId: state.activeProjectId, updateLiveCanvas: true, stats }),
       )
       const nextActiveProject = {
         ...activeProject,
@@ -464,7 +464,7 @@ export const useProjectStore = create<ProjectStore>()((set, get) => {
       isReady: false,
     }))
 
-    await restoreProjectWorkspace(project.workingSnapshot)
+    await restoreProjectWorkspace(project.workingSnapshot, project.id)
     set({ isReady: true })
 
     const persisted = await persistWorkspaceProjectIfConfigured(project, {
@@ -555,7 +555,7 @@ export const useProjectStore = create<ProjectStore>()((set, get) => {
       isReady: false,
     }))
 
-    await restoreProjectWorkspace(openedProject.workingSnapshot)
+    await restoreProjectWorkspace(openedProject.workingSnapshot, openedProject.id)
     set({ isReady: true })
 
     await persistWorkspaceProjectIfConfigured(openedProject, {
@@ -688,7 +688,7 @@ export const useProjectStore = create<ProjectStore>()((set, get) => {
       persistenceMetaByProjectId: {},
       isReady: false,
     })
-    await restoreProjectWorkspace(openedFallbackProject.workingSnapshot)
+    await restoreProjectWorkspace(openedFallbackProject.workingSnapshot, openedFallbackProject.id)
     set({ isReady: true })
     await persistWorkspaceProjectIfConfigured(archivedProject, {
       activeProjectId: openedFallbackProject.id,
@@ -813,7 +813,7 @@ export const useProjectStore = create<ProjectStore>()((set, get) => {
         isReady: false,
       })
 
-      await restoreProjectWorkspace(nextFallbackProject.workingSnapshot)
+      await restoreProjectWorkspace(nextFallbackProject.workingSnapshot, nextFallbackProject.id)
       set({ isReady: true })
       if (isStorageConfigured()) {
         await platformBridge.deleteWorkspaceProject({

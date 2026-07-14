@@ -13,6 +13,7 @@ import { getNodeConnectionInputs, getNodeConnectionOutput, getQuickCreateTargetH
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { useFeedbackStore } from '@/store/useFeedbackStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
+import { useProjectStore } from '@/store/useProjectStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { themeClasses } from '@/styles/themeClasses'
 import { MAX_GENERATE_REFERENCE_IMAGES } from '@/constants/generateNode'
@@ -112,6 +113,7 @@ export function Canvas() {
   const canvasGridEnabled = useSettingsStore((state) => state.config.storage.canvasGridEnabled)
   const edgeStyle = useSettingsStore((state) => state.config.storage.edgeStyle)
   const workspaceConfigured = useSettingsStore((state) => state.runtime.workspaceConfigured)
+  const activeProjectId = useProjectStore((state) => state.activeProjectId)
   const setStorageSettings = useSettingsStore((state) => state.setStorageSettings)
   const persistWorkspaceConfig = useSettingsStore((state) => state.persistWorkspaceConfig)
   const notify = useFeedbackStore((state) => state.notify)
@@ -566,7 +568,7 @@ export function Canvas() {
       y: event.clientY,
     })
 
-    void importImageFile(file, workspaceConfigured)
+    void importImageFile(file, workspaceConfigured, activeProjectId)
       .then((importedImage) => {
         runTracked(() => {
           const imageNodeId = addImageNode(preferredPosition)
@@ -584,7 +586,7 @@ export function Canvas() {
       .catch((error) => {
         notify({ tone: 'error', title: '图片导入失败', message: error instanceof Error ? error.message : UI_TEXT.importImageFailed })
       })
-  }, [addImageNode, notify, runTracked, screenToFlowPosition, updateNodeData, workspaceConfigured])
+  }, [activeProjectId, addImageNode, notify, runTracked, screenToFlowPosition, updateNodeData, workspaceConfigured])
 
   useEffect(() => {
     if (!quickCreateMenu) {

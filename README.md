@@ -67,13 +67,14 @@ npm run validate:canvas-internal-drag
 npm run desktop:check
 npm run desktop:dev
 npm run desktop:build
+npm run desktop:build:installer
 ```
 
-桌面开发和打包只要求 Node.js 与 npm，不需要 Rust、Cargo、MSVC 或 Windows SDK。`desktop:build` 默认生成 `release/AI-Canvas-<version>-x64.exe`。详细说明见[桌面开发指南](docs/DESKTOP.md)。
+桌面开发和打包只要求 Node.js 与 npm，不需要 Rust、Cargo、MSVC 或 Windows SDK。`desktop:build` 生成 Windows 便携版，`desktop:build:installer` 生成可选择安装目录并创建快捷方式的 NSIS 安装版。详细说明见[桌面开发指南](docs/DESKTOP.md)。
 
 ## 数据模型
 
-Web 端通过 File System Access API 使用用户选择的工作区目录，项目采用项目级 JSON 读写。桌面端在所选工作区使用 `.ai-canvas/workspace.sqlite` 保存项目整体 JSON、设置和派生索引。两端媒体都存放在 `images/`，完整项目快照均为 `{ canvas, taskQueue }`。
+Web 端通过 File System Access API 使用用户选择的工作区目录，项目采用项目级 JSON 读写。桌面端在所选工作区使用 `.ai-canvas/workspace.sqlite` 保存项目整体 JSON、设置和派生索引。两端媒体都存放在 `images/`，新资产按 `images/projects/<project-id>/` 归属项目，完整项目快照均为 `{ canvas, taskQueue }`。
 
 跨平台迁移使用稳定的工作区目录包：
 

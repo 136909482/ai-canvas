@@ -21,6 +21,7 @@ const projectStoreSource = readFileSync(
   fileURLToPath(new URL('../src/store/useProjectStore.ts', import.meta.url)),
   'utf8',
 )
+const normalizedProjectStoreSource = projectStoreSource.replace(/\r\n/g, '\n')
 
 if (
   !dialogSource.includes("from '@/components/projectManager/ProjectManagerParts'")
@@ -50,8 +51,8 @@ if (
 }
 
 if (
-  !projectStoreSource.includes('createProject: (name?: string) => Promise<string | null>')
-  || !projectStoreSource.includes("createProject: async (name) => {\n    if (!isStorageConfigured()) {\n      return null")
+  !normalizedProjectStoreSource.includes('createProject: (name?: string) => Promise<string | null>')
+  || !normalizedProjectStoreSource.includes("createProject: async (name) => {\n    if (!isStorageConfigured()) {\n      return null")
 ) {
   throw new Error('Project creation should be rejected while no persistent workspace is configured')
 }

@@ -47,6 +47,7 @@
     - 工作区清单和每个项目的 JSON 文件
     - `.config/config.json` 下的工作区配置
     - `images/` 目录下的导入/生成图片资源
+  - 新项目资产按 `images/projects/<project-id>/` 存放，统一路径入口是 `src/features/projectManager/projectAssetPaths.ts`。项目名不参与路径，旧资产路径保持可读，删除项目时不得直接删项目资产目录，仍按全工作区引用扫描清理。
   - `saveActiveProject()` 更新项目的 saved snapshot；`persistWorkspaceFile()` 更新 working snapshot 和 autosave 基线。这个差异会直接影响未保存变更的判定行为。
   - 工作流导入/导出只包含画布数据（`nodes` + `edges`），不包含完整项目或任务队列持久化内容。
   - 跨平台工作区迁移使用目录包：`workspace.json`、`projects/*.json`、脱敏后的 `.config/config.json` 和 `images/` 中被引用的资产。首版导入会在确认后替换整个工作区，不执行项目合并。
@@ -62,7 +63,7 @@
   ### 主题系统
 
   - 当前主题模式为 `dark`、`light`、`system`，通过根节点 `data-theme` 与 CSS 变量驱动，不建议在组件里用大量 `dark:` 分支维护两套样式。
-  - 主题切换入口位于画布左上角工具区域，不放在设置弹层里；这是用户明确确认过的交互位置。
+  - 完整主题设置位于设置弹层的“外观设置”，画布左上角保留快速切换入口，两处状态必须同步。
   - 主题样式优先从 `src/styles/themeClasses.ts` 复用；如果新增跨组件通用样式，先扩展 `themeClasses`，再在组件中引用。
   - 节点外壳主题集中在 `src/nodes/nodeShellClassName.ts` 和 `src/nodes/nodeShell.tsx`，新增节点应复用 `getNodeShellClassName({ selected })`、`NodeHeader`、`NodeDeleteButton`、`NodeResizerPreset` 等节点外壳基础组件。
   - 主题和 UI 的长期约束统一维护在 `docs/DEVELOPMENT.md` 与本文件，不再保留单次主题改造完成记录。

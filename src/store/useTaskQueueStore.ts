@@ -12,6 +12,7 @@ import type {
 } from '@/types'
 
 export interface GenerateTaskSnapshot {
+  projectId?: string | null
   kind?: 'image' | 'video'
   sourceNodeId: string
   previewNodeId?: string | null
@@ -43,7 +44,7 @@ interface TaskQueueStore {
   runtimeVersion: number
   createTask: (input: GenerateTaskSnapshot) => string
   getSnapshot: () => TaskQueueSnapshot
-  replaceSnapshot: (snapshot: TaskQueueSnapshot) => void
+  replaceSnapshot: (snapshot: TaskQueueSnapshot, projectId?: string | null) => void
   resetToEmpty: () => void
   markTaskQueued: (id: string, patch?: Partial<GenerateTaskSnapshot>) => void
   markTaskRunning: (id: string, previewNodeId?: string | null) => void
@@ -82,9 +83,10 @@ function syncTaskIdCounter(tasks: GenerateTask[]) {
   taskIdCounter = maxTaskId + 1
 }
 
-function sanitizeTask(task: GenerateTask): GenerateTask {
+function sanitizeTask(task: GenerateTask, projectId?: string | null): GenerateTask {
   return {
     ...task,
+    projectId: projectId ?? task.projectId ?? null,
     kind: task.kind === 'video' ? 'video' : 'image',
     displayId: typeof task.displayId === 'string' && task.displayId.trim()
       ? task.displayId
@@ -116,12 +118,12 @@ function sanitizeTask(task: GenerateTask): GenerateTask {
   }
 }
 
-function sanitizeTasks(tasks: GenerateTask[]): GenerateTask[] {
-  return tasks.map((task) => sanitizeTask(task))
+function sanitizeTasks(tasks: GenerateTask[], projectId?: string | null): GenerateTask[] {
+  return tasks.map((task) => sanitizeTask(task, projectId))
 }
 
-export function recoverTaskAfterSnapshotLoad(task: GenerateTask): GenerateTask {
-  const sanitizedTask = sanitizeTask(task)
+export function recoverTaskAfterSnapshotLoad(task: GenerateTask, projectId?: string | null): GenerateTask {
+  const sanitizedTask = sanitizeTask(task, projectId)
 
   if (sanitizedTask.status === 'running' && sanitizedTask.remoteTaskId) {
     return {
@@ -158,13 +160,17 @@ export function recoverTaskAfterSnapshotLoad(task: GenerateTask): GenerateTask {
   return sanitizedTask
 }
 
-export function recoverTasksAfterSnapshotLoad(tasks: GenerateTask[]): GenerateTask[] {
-  return tasks.map((task) => recoverTaskAfterSnapshotLoad(task))
+export function recoverTasksAfterSnapshotLoad(tasks: GenerateTask[], projectId?: string | null): GenerateTask[] {
+  return tasks.map((task) => recoverTaskAfterSnapshotLoad(task, projectId))
 }
 
 function mergeTaskSnapshot(task: GenerateTask, patch?: Partial<GenerateTaskSnapshot>): GenerateTask {
   return {
     ...task,
+    projectId:
+      patch && 'projectId' in patch
+        ? patch.projectId ?? null
+        : task.projectId ?? null,
     kind: patch?.kind ?? task.kind,
     sourceNodeId: patch?.sourceNodeId ?? task.sourceNodeId,
     previewNodeId:
@@ -252,6 +258,7 @@ export const useTaskQueueStore = create<TaskQueueStore>((set, get) => ({
         {
           id: taskId,
           displayId,
+          projectId: input.projectId ?? null,
           kind: input.kind ?? 'image',
           sourceNodeId: input.sourceNodeId,
           previewNodeId: input.previewNodeId ?? null,
@@ -294,9 +301,9 @@ export const useTaskQueueStore = create<TaskQueueStore>((set, get) => ({
     tasks: sanitizeTasks(get().tasks),
   }),
 
-  replaceSnapshot: (snapshot) =>
+  replaceSnapshot: (snapshot, projectId) =>
     set((state) => {
-      const tasks = recoverTasksAfterSnapshotLoad(sanitizeTasks(snapshot.tasks ?? []))
+      const tasks = recoverTasksAfterSnapshotLoad(sanitizeTasks(snapshot.tasks ?? [], projectId), projectId)
       syncTaskIdCounter(tasks)
 
       return {

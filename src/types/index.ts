@@ -351,6 +351,7 @@ export type GenerateTaskRemoteStatus = 'IN_PROGRESS' | 'SUCCESS' | 'FAILURE'
 export interface GenerateTask {
   id: string
   displayId: string
+  projectId: string | null
   kind: 'image' | 'video'
   sourceNodeId: string
   previewNodeId: string | null

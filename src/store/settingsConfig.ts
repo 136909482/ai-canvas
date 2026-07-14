@@ -208,6 +208,10 @@ function migrateLegacyModels(config?: LegacyConfigShape): CustomImageModelConfig
   const aliyunConfig = config?.providers?.aliyun
   const modelId = aliyunConfig?.model ?? config?.model ?? DEFAULT_IMAGE_MODEL_ID
 
+  if (!modelId.trim()) {
+    return []
+  }
+
   return [
     normalizeCustomModel({
       id: 'default-aliyun-model',
@@ -221,6 +225,11 @@ function migrateLegacyModels(config?: LegacyConfigShape): CustomImageModelConfig
 
 function migrateLegacyProviderProfiles(config?: LegacyConfigShape): ProviderProfileConfig[] {
   const aliyunConfig = config?.providers?.aliyun
+
+  if (!aliyunConfig && !config?.apiKey?.trim() && !config?.apiUrl?.trim()) {
+    return []
+  }
+
   const apiKey = aliyunConfig?.apiKey ?? config?.apiKey ?? ''
   const apiUrl = aliyunConfig?.apiUrl ?? config?.apiUrl ?? DEFAULT_ALIYUN_BASE_URL
 
@@ -270,12 +279,12 @@ export function normalizeStorageConfig(config?: Partial<StorageConfig>): Storage
 
 export function normalizeConfig(config?: Partial<ApiConfig> | LegacyConfigShape): ApiConfig {
   const maybeCustomModels = (config as Partial<ApiConfig> | undefined)?.customModels
-  const customModels = Array.isArray(maybeCustomModels) && maybeCustomModels.length > 0
+  const customModels = Array.isArray(maybeCustomModels)
     ? maybeCustomModels.map((model) => normalizeCustomModel(model))
     : migrateLegacyModels(config as LegacyConfigShape | undefined)
 
   const maybeProviderProfiles = (config as Partial<ApiConfig> | undefined)?.providerProfiles
-  const providerProfiles = Array.isArray(maybeProviderProfiles) && maybeProviderProfiles.length > 0
+  const providerProfiles = Array.isArray(maybeProviderProfiles)
     ? maybeProviderProfiles.map((profile) => normalizeProviderProfile(profile))
     : Array.isArray(maybeCustomModels) && maybeCustomModels.length > 0
       ? maybeCustomModels.map((model) => modelToMigratedProviderProfile(model))
@@ -312,7 +321,7 @@ export function normalizeConfig(config?: Partial<ApiConfig> | LegacyConfigShape)
   )
 
   return {
-    model: hasDefaultModel ? defaultModel ?? enabledModels[0]?.modelId ?? DEFAULT_IMAGE_MODEL_ID : enabledModels[0]?.modelId ?? DEFAULT_IMAGE_MODEL_ID,
+    model: hasDefaultModel ? defaultModel ?? enabledModels[0]?.modelId ?? '' : enabledModels[0]?.modelId ?? '',
     customModels,
     providerProfiles,
     activeProviderProfileIds,

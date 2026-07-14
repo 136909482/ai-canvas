@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState, type FocusEvent, type SyntheticEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Handle, Position, useConnection, type Edge, type Node } from '@xyflow/react'
+import { Handle, Position, type Edge, type Node } from '@xyflow/react'
 import { useShallow } from 'zustand/react/shallow'
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { StableNodeToolbar } from '@/components/StableNodeToolbar'
@@ -230,8 +230,6 @@ export const TextNode = memo(function TextNode({ id, data, selected, dragging }:
   const commitTransaction = useHistoryStore((s) => s.commitTransaction)
   const runTracked = useHistoryStore((s) => s.runTracked)
   const undo = useHistoryStore((s) => s.undo)
-  const connection = useConnection()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
   const text = (data.text as string) || ''
   const richPrompt = data.richPrompt as RichPromptDocument | null | undefined
   const label = typeof data.label === 'string' && data.label.trim() && data.label !== 'Prompt'
@@ -549,7 +547,7 @@ export const TextNode = memo(function TextNode({ id, data, selected, dragging }:
           id="output"
           className="handle-orb-anchor !w-[18px] !h-[18px] !rounded-full !border-0 !bg-transparent !p-0"
         >
-          <span className={`handle-orb handle-orb--source ${isConnecting ? 'is-connecting' : ''}`}>
+          <span className="handle-orb handle-orb--source">
             <span className="handle-orb__glow" />
             <span className="handle-orb__ring" />
             <span className="handle-orb__dot" />

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState, type PointerEvent } from 'react'
-import { Handle, Position, useConnection } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { Brush, Eraser, Eye, EyeOff, ImagePlus, Link2, Trash2 } from 'lucide-react'
 import { CanvasImagePreview } from '@/components/CanvasImagePreview'
 import { getCanvasNodeById } from '@/store/canvasConnectionSources'
@@ -267,8 +267,6 @@ export const ImageEditNode = memo(function ImageEditNode({ id, data, selected }:
     })),
   )
   const runTracked = useHistoryStore((s) => s.runTracked)
-  const connection = useConnection()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
 
   const baseImageUrl = baseSource.imageUrl
   const baseLabel = baseSource.label
@@ -338,7 +336,7 @@ export const ImageEditNode = memo(function ImageEditNode({ id, data, selected }:
         id="image"
         className="handle-orb-anchor !w-[18px] !h-[18px] !rounded-full !border-0 !bg-transparent !p-0"
       >
-        <span className={`handle-orb handle-orb--source ${isConnecting ? 'is-connecting' : ''}`}>
+        <span className="handle-orb handle-orb--source">
           <span className="handle-orb__glow" />
           <span className="handle-orb__ring" />
           <span className="handle-orb__dot" />

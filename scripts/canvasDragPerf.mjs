@@ -124,7 +124,7 @@ function parseArgs(argv) {
         break
       case '--gesture':
         options.gesture = String(nextValue || '').trim()
-        if (!['drag', 'pan', 'select-pan', 'zoom'].includes(options.gesture)) {
+        if (!['drag', 'connect', 'pan', 'select-pan', 'zoom'].includes(options.gesture)) {
           throw new Error(`Unsupported gesture: ${options.gesture}`)
         }
         index += 1
@@ -189,8 +189,8 @@ Options:
   --project-name <name>       Project name to load from the workspace manifest.
   --node-id <id>              Node id to drag. Defaults to the largest image node in real projects.
   --runs <count>              Number of independent drag samples. Default: 1
-  --gesture <drag|pan|select-pan|zoom>
-                              Sample node drag, canvas pan, immediate pan after selection, or zoom. Default: drag
+  --gesture <drag|connect|pan|select-pan|zoom>
+                              Sample node drag, connection drag, canvas pan, immediate pan after selection, or zoom. Default: drag
   --force-culling <mode>      Override React Flow visible-element culling: auto, on, or off. Default: auto
   --canvas-performance-mode <quality|performance>
                               Simulate the user-selected canvas performance setting.
@@ -989,6 +989,74 @@ async function runDragGesture(page, options, targetNodeId) {
   await page.evaluate(() => window.__canvasDragPerfMarkDragStop?.())
 }
 
+async function runConnectGesture(page, options, targetNodeId) {
+  const targetSourceHandle = page.locator(
+    `[data-testid="node-${targetNodeId}"] .react-flow__handle.source`,
+  ).first()
+  const sourceHandles = page.locator('.react-flow__node .react-flow__handle.source')
+  const targetIsHitTestable = await targetSourceHandle.evaluate((element, dragDistance) => {
+    const rect = element.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    const hit = document.elementFromPoint(centerX, centerY)
+    const hasHorizontalRoom = centerX + dragDistance < window.innerWidth - 20
+      || centerX - dragDistance > 20
+    return Boolean(hit && (hit === element || element.contains(hit)) && hasHorizontalRoom)
+  }, options.dragDistance).catch(() => false)
+  const hitTestableSourceIndex = targetIsHitTestable
+    ? -1
+    : await sourceHandles.evaluateAll((handles, dragDistance) => handles.findIndex((element) => {
+        const rect = element.getBoundingClientRect()
+        const centerX = rect.left + rect.width / 2
+        const centerY = rect.top + rect.height / 2
+        const hit = document.elementFromPoint(centerX, centerY)
+        const hasHorizontalRoom = centerX + dragDistance < window.innerWidth - 20
+          || centerX - dragDistance > 20
+        return Boolean(hit && (hit === element || element.contains(hit)) && hasHorizontalRoom)
+      }), options.dragDistance)
+  const sourceHandle = targetIsHitTestable
+    ? targetSourceHandle
+    : sourceHandles.nth(hitTestableSourceIndex)
+  if (hitTestableSourceIndex < 0 && !targetIsHitTestable) {
+    throw new Error('Unable to locate a hit-testable source connection handle in the viewport')
+  }
+  await sourceHandle.waitFor({ state: 'visible', timeout: 15_000 })
+  const box = await sourceHandle.boundingBox()
+  if (!box) {
+    throw new Error('Unable to locate source connection handle bounds')
+  }
+
+  const startX = box.x + box.width / 2
+  const startY = box.y + box.height / 2
+  const viewportWidth = page.viewportSize()?.width ?? 1440
+  const dragDirection = startX + options.dragDistance < viewportWidth - 20 ? 1 : -1
+
+  await page.mouse.move(startX, startY)
+  await page.mouse.down()
+  for (let step = 1; step <= 4; step += 1) {
+    await page.mouse.move(startX + dragDirection * step * 3, startY)
+    await page.waitForTimeout(8)
+  }
+  const sourceHandleClassName = await sourceHandle.getAttribute('class')
+  if (!sourceHandleClassName?.split(/\s+/).includes('connectingfrom')) {
+    throw new Error(`Source handle did not enter connectingfrom state: ${sourceHandleClassName ?? '(no class)'}`)
+  }
+  await page.evaluate(() => window.__canvasDragPerfMarkDragStart?.())
+
+  for (let step = 1; step <= options.dragSteps; step += 1) {
+    const progress = step / options.dragSteps
+    await page.mouse.move(
+      startX + dragDirection * options.dragDistance * progress,
+      startY + Math.sin(progress * Math.PI) * 48,
+    )
+    await page.waitForTimeout(8)
+  }
+
+  await page.mouse.up()
+  await page.evaluate(() => window.__canvasDragPerfMarkDragStop?.())
+  await page.keyboard.press('Escape')
+}
+
 async function runPanGesture(page, options) {
   const pane = page.locator('.react-flow__pane').first()
   await pane.waitFor({ state: 'visible', timeout: 15_000 })
@@ -1502,6 +1570,8 @@ async function runSingleSample(context, baseUrl, options, workspaceScenario, tar
     await page.locator('.react-flow__node').first().waitFor({ state: 'visible', timeout: 15_000 })
     if (options.gesture === 'drag' || options.gesture === 'select-pan') {
       await page.locator(`[data-testid="node-${targetNodeId}"]`).waitFor({ state: 'visible', timeout: 15_000 })
+    } else if (options.gesture === 'connect') {
+      await page.locator('.react-flow__node .react-flow__handle.source').first().waitFor({ state: 'visible', timeout: 15_000 })
     } else {
       await page.locator(`[data-testid="node-${targetNodeId}"]`).waitFor({ state: 'visible', timeout: 2_000 }).catch(() => undefined)
     }
@@ -1545,6 +1615,8 @@ async function runSingleSample(context, baseUrl, options, workspaceScenario, tar
   await startBrowserSampler(page)
   if (options.gesture === 'pan') {
     await runPanGesture(page, options)
+  } else if (options.gesture === 'connect') {
+    await runConnectGesture(page, options, targetNodeId)
   } else if (options.gesture === 'select-pan') {
     await runSelectPanGesture(page, options, targetNodeId)
   } else if (options.gesture === 'zoom') {

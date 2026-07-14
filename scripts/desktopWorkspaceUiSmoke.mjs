@@ -358,7 +358,7 @@ try {
   await page.getByRole('button', { name: '关闭项目管理' }).click()
 
   await page.getByRole('button', { name: '设置' }).click()
-  await page.getByText('存储与保存', { exact: true }).click()
+  await page.getByText('存储管理', { exact: true }).click()
   await page.getByTestId('workspace-bundle-export').waitFor()
   await captureScreenshot(page, 'p0-desktop-storage.png')
 
@@ -451,10 +451,10 @@ try {
   await diskInspection.getByText('images/p1-orphan-preview.png', { exact: true }).waitFor()
   await captureScreenshot(page, 'p1-desktop-orphan-preview.png')
 
-  await page.getByRole('button', { name: '清理孤儿资产' }).click()
+  await page.getByRole('button', { name: '清理未引用文件' }).click()
   const cleanupDialog = page.getByTestId('feedback-confirm-dialog')
   await cleanupDialog.waitFor()
-  assert.match(await cleanupDialog.innerText(), /删除 1 个孤儿资产，释放 3 B/)
+  assert.match(await cleanupDialog.innerText(), /删除 1 个未引用文件，释放 3 B/)
   assert.match(await cleanupDialog.innerText(), /images\/p1-orphan-preview\.png/)
   await captureScreenshot(page, 'p1-desktop-cleanup-impact.png')
   await page.getByTestId('feedback-confirm-submit').click()

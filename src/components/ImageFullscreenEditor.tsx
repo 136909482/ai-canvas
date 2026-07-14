@@ -2,11 +2,13 @@
 import { Brush, Check, Circle, Download, Minus, MousePointer2, Plus, RectangleHorizontal, RotateCcw, Save, Slash, Trash2, Type, Undo2, X } from 'lucide-react'
 import { TooltipIconButton } from '@/components/TooltipIconButton'
 import { writeWorkspaceImageAsset } from '@/features/imageAssets/runtime'
+import { buildProjectAssetPath } from '@/features/projectManager/projectAssetPaths'
 import { platformBridge } from '@/platform'
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { useFeedbackStore } from '@/store/useFeedbackStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
 import { useImageEditorStore } from '@/store/useImageEditorStore'
+import { useProjectStore } from '@/store/useProjectStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { themeClasses } from '@/styles/themeClasses'
 import { useDialogFocus } from '@/hooks/useDialogFocus'
@@ -49,6 +51,7 @@ export function ImageFullscreenEditor() {
   const createGeneratedPreviewNode = useCanvasStore((state) => state.createGeneratedPreviewNode)
   const runTracked = useHistoryStore((state) => state.runTracked)
   const workspaceConfigured = useSettingsStore((state) => state.runtime.workspaceConfigured)
+  const activeProjectId = useProjectStore((state) => state.activeProjectId)
   const notify = useFeedbackStore((state) => state.notify)
   const imageCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const annotationCanvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -884,7 +887,7 @@ export function ImageFullscreenEditor() {
 
     const blob = await dataUrlToBlob(imageUrl)
     const imageAsset = await writeWorkspaceImageAsset({
-      pathSegments: ['manual-edits'],
+      pathSegments: buildProjectAssetPath(activeProjectId, 'edits'),
       fileName,
       blob,
       originalWidth: imageSize.width,

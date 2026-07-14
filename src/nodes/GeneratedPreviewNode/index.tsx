@@ -1,5 +1,5 @@
 ﻿import { memo, useCallback, useEffect, useState } from 'react'
-import { Handle, Position, useConnection, type OnResizeEnd } from '@xyflow/react'
+import { Handle, Position, type OnResizeEnd } from '@xyflow/react'
 import { Brush, Check, Clock3, Download, Image as ImageIcon, Loader2, Maximize, Sparkles } from 'lucide-react'
 import { CanvasImagePreview } from '@/components/CanvasImagePreview'
 import { StableNodeToolbar } from '@/components/StableNodeToolbar'
@@ -102,8 +102,6 @@ function formatModelLabel(model: string, modelName?: string) {
       return 'Nano Banana 2'
     case 'nano-banana-pro':
       return 'Nano Banana Pro'
-    case 'qwen-image-2.0-pro':
-      return 'Qwen Image 2.0 Pro'
     default:
       return model.toUpperCase()
   }
@@ -185,8 +183,6 @@ export const GeneratedPreviewNode = memo(function GeneratedPreviewNode({ id, dat
   const modelName = useSettingsStore((s) => s.getModelConfig(data.model)?.name)
   const beginTransaction = useHistoryStore((s) => s.beginTransaction)
   const runTracked = useHistoryStore((s) => s.runTracked)
-  const connection = useConnection()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
   const hasImage = Boolean(data.imageUrl)
   const isQueued = data.status === 'queued'
   const isGenerating = data.status === 'generating'
@@ -396,7 +392,7 @@ export const GeneratedPreviewNode = memo(function GeneratedPreviewNode({ id, dat
           id="output"
           className="handle-orb-anchor !w-[18px] !h-[18px] !rounded-full !border-0 !bg-transparent !p-0 !z-30"
         >
-          <span className={`handle-orb handle-orb--source ${isConnecting ? 'is-connecting' : ''}`}>
+          <span className="handle-orb handle-orb--source">
             <span className="handle-orb__glow" />
             <span className="handle-orb__ring" />
             <span className="handle-orb__dot" />

@@ -1,4 +1,8 @@
 import { writeWorkspaceImageAsset, writeWorkspaceImageThumbnailAsset } from '@/features/imageAssets/runtime'
+import {
+  buildProjectAssetPath,
+  getWorkspaceAssetPathParts,
+} from '@/features/projectManager/projectAssetPaths'
 import { platformBridge } from '@/platform'
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -8,10 +12,6 @@ import {
   type ProjectSnapshot,
   type WorkspaceImageAsset,
 } from '@/types'
-
-const MIGRATED_IMAGE_ASSET_PATH = ['migrated-images']
-const MIGRATED_VIDEO_ASSET_PATH = ['migrated-videos']
-const BACKFILLED_THUMBNAIL_ASSET_PATH = ['backfilled']
 
 export function isStorageConfigured() {
   return useSettingsStore.getState().runtime.workspaceConfigured
@@ -96,8 +96,9 @@ async function enrichWorkspaceImageAssetThumbnail(
       }
 
       const blob = await response.blob()
+      const pathParts = getWorkspaceAssetPathParts(asset.relativePath, getImageAssetFileName(asset))
       const thumbnailMeta = await writeWorkspaceImageThumbnailAsset({
-        pathSegments: BACKFILLED_THUMBNAIL_ASSET_PATH,
+        pathSegments: pathParts.pathSegments,
         fileName: getImageAssetFileName(asset),
         blob,
         originalWidth: asset.originalWidth,
@@ -123,6 +124,7 @@ async function enrichWorkspaceImageAssetThumbnail(
 export async function migrateSnapshotEmbeddedImageAssets(
   snapshot: ProjectSnapshot,
   options?: {
+    projectId?: string | null
     updateLiveCanvas?: boolean
     thumbnailCache?: Map<string, Promise<WorkspaceImageAsset>>
     stats?: { thumbnailBackfillCount: number }
@@ -146,7 +148,7 @@ export async function migrateSnapshotEmbeddedImageAssets(
 
       const blob = await embeddedMediaUrlToBlob(videoUrl)
       const videoAsset = await platformBridge.writeWorkspaceAsset({
-        pathSegments: MIGRATED_VIDEO_ASSET_PATH,
+        pathSegments: buildProjectAssetPath(options?.projectId, 'migrated', 'videos'),
         fileName: getMigratedVideoFileName(node),
         blob,
       })
@@ -197,7 +199,7 @@ export async function migrateSnapshotEmbeddedImageAssets(
 
     const blob = await embeddedMediaUrlToBlob(imageUrl)
     const imageAsset = await writeWorkspaceImageAsset({
-      pathSegments: MIGRATED_IMAGE_ASSET_PATH,
+      pathSegments: buildProjectAssetPath(options?.projectId, 'migrated', 'images'),
       fileName: getMigratedImageFileName(node),
       blob,
     })

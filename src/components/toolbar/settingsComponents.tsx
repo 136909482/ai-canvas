@@ -54,3 +54,25 @@ export function DetailRow({ label, hint, children }: DetailRowProps) {
     </div>
   )
 }
+
+type CanvasSettingsSwitchProps = {
+  checked: boolean
+  label: string
+  onChange: () => void
+}
+
+export function CanvasSettingsSwitch({ checked, label, onChange }: CanvasSettingsSwitchProps) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      data-state={checked ? 'checked' : 'unchecked'}
+      onClick={onChange}
+      className="settings-switch"
+    >
+      <span className="settings-switch__thumb" aria-hidden="true" />
+    </button>
+  )
+}

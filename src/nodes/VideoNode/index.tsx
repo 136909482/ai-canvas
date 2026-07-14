@@ -1,12 +1,14 @@
 import { memo, useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Handle, Position, useConnection, type OnResizeEnd } from '@xyflow/react'
+import { Handle, Position, type OnResizeEnd } from '@xyflow/react'
 import { Clock3, Download, LoaderCircle, Maximize, Pause, Play, Upload, Video, Volume2, VolumeX, X } from 'lucide-react'
+import { buildProjectAssetPath } from '@/features/projectManager/projectAssetPaths'
 import { platformBridge } from '@/platform'
 import { StableNodeToolbar } from '@/components/StableNodeToolbar'
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { useFeedbackStore } from '@/store/useFeedbackStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
+import { useProjectStore } from '@/store/useProjectStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import type { AppNodeProps } from '@/types'
 import { themeClasses } from '@/styles/themeClasses'
@@ -15,8 +17,6 @@ import { getNodeShellClassName } from '../nodeShellClassName'
 import { areNodeContentPropsEqual } from '../nodePropComparators'
 
 type VideoNodeProps = AppNodeProps<'videoNode'>
-
-const MANUAL_UPLOAD_ASSET_PATH = ['manual-videos']
 
 const UI_TEXT = {
   invalidVideo: '请上传视频文件',
@@ -184,6 +184,7 @@ export const VideoNode = memo(function VideoNode({ id, data, selected, dragging 
   const beginTransaction = useHistoryStore((s) => s.beginTransaction)
   const runTracked = useHistoryStore((s) => s.runTracked)
   const workspaceConfigured = useSettingsStore((s) => s.runtime.workspaceConfigured)
+  const activeProjectId = useProjectStore((s) => s.activeProjectId)
   const notify = useFeedbackStore((s) => s.notify)
   const [isDragging, setIsDragging] = useState(false)
   const [videoInfo, setVideoInfo] = useState({ duration: 0, width: 0, height: 0, name: '' })
@@ -196,8 +197,6 @@ export const VideoNode = memo(function VideoNode({ id, data, selected, dragging 
   const [saveError, setSaveError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const connection = useConnection()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('video/')) {
@@ -211,7 +210,7 @@ export const VideoNode = memo(function VideoNode({ id, data, selected, dragging 
       const metadata = await loadVideoMetadata(tempVideoUrl)
       const asset = workspaceConfigured
         ? await platformBridge.writeWorkspaceAsset({
-            pathSegments: MANUAL_UPLOAD_ASSET_PATH,
+            pathSegments: buildProjectAssetPath(activeProjectId, 'uploads'),
             fileName: file.name,
             blob: file,
           })
@@ -245,7 +244,7 @@ export const VideoNode = memo(function VideoNode({ id, data, selected, dragging 
     } finally {
       URL.revokeObjectURL(tempVideoUrl)
     }
-  }, [id, notify, runTracked, updateNodeData, workspaceConfigured])
+  }, [activeProjectId, id, notify, runTracked, updateNodeData, workspaceConfigured])
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -531,7 +530,7 @@ export const VideoNode = memo(function VideoNode({ id, data, selected, dragging 
           id="output"
           className="handle-orb-anchor !w-[18px] !h-[18px] !rounded-full !border-0 !bg-transparent !p-0 !z-30"
         >
-          <span className={`handle-orb ${isConnecting ? 'is-connecting' : ''}`}>
+          <span className="handle-orb">
             <span className="handle-orb__glow" />
             <span className="handle-orb__ring" />
             <span className="handle-orb__dot" />

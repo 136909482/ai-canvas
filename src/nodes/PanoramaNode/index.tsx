@@ -8,6 +8,7 @@ import { getCanvasNodeById } from '@/store/canvasConnectionSources'
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { useFeedbackStore } from '@/store/useFeedbackStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
+import { useProjectStore } from '@/store/useProjectStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { themeClasses } from '@/styles/themeClasses'
 import { isImageSourceNodeType, type AppNodeProps } from '@/types'
@@ -61,6 +62,7 @@ export const PanoramaNode = memo(function PanoramaNode({ id, data, selected, dra
   )
   const runTracked = useHistoryStore((s) => s.runTracked)
   const workspaceConfigured = useSettingsStore((s) => s.runtime.workspaceConfigured)
+  const activeProjectId = useProjectStore((s) => s.activeProjectId)
   const notify = useFeedbackStore((s) => s.notify)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const viewerRef = useRef<PanoramaViewerHandle | null>(null)
@@ -77,7 +79,7 @@ export const PanoramaNode = memo(function PanoramaNode({ id, data, selected, dra
     }
 
     try {
-      const importedImage = await importImageFile(file, workspaceConfigured)
+      const importedImage = await importImageFile(file, workspaceConfigured, activeProjectId)
 
       runTracked(() => {
         updateNodeData(id, {
@@ -89,7 +91,7 @@ export const PanoramaNode = memo(function PanoramaNode({ id, data, selected, dra
     } catch (error) {
       notify({ tone: 'error', title: '图片上传失败', message: error instanceof Error ? error.message : UI_TEXT.uploadFailed })
     }
-  }, [id, notify, runTracked, updateNodeData, workspaceConfigured])
+  }, [activeProjectId, id, notify, runTracked, updateNodeData, workspaceConfigured])
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]

@@ -18,7 +18,7 @@ AI Canvas 桌面端使用 Electron 复用现有 React/Vite 应用。开发和打
 
 preload 通过 `ai-canvas:workspace:*` 白名单 IPC 暴露工作区操作，不暴露通用 `ipcRenderer` 或 Node.js。共享组件和 store 仍然只调用 `platformBridge`。
 
-当前桌面 bridge 已使用 Electron IPC、Node 文件 API 和内置 `node:sqlite`，覆盖原生目录选择、项目/配置读写、图片资产、孤儿资产清理、工作流 JSON、工作区目录包和单项目目录包。所有同步 SQLite 操作都在独立持久化 Worker 中执行，主进程只进行异步 RPC 转发。项目和设置主数据位于所选工作区的 `.ai-canvas/workspace.sqlite`；媒体仍使用 `images/` 文件目录。Electron 用户数据目录只保存所选工作区路径，不保存项目正文。
+当前桌面 bridge 已使用 Electron IPC、Node 文件 API 和内置 `node:sqlite`，覆盖原生目录选择、项目/配置读写、图片资产、未引用资产清理、工作流 JSON、工作区目录包和单项目目录包。所有同步 SQLite 操作都在独立持久化 Worker 中执行，主进程只进行异步 RPC 转发。项目和设置主数据位于所选工作区的 `.ai-canvas/workspace.sqlite`；媒体仍使用 `images/` 文件目录。Electron 用户数据目录只保存所选工作区路径，不保存项目正文。
 
 首次启动且尚未配置工作区时，应用必须先要求用户选择项目保存位置，完成目录加载后才允许新建或导入项目。项目 Store 同样拒绝在未配置工作区时创建临时项目，避免随后选择目录并重载工作区时丢失内存项目。
 
@@ -66,11 +66,27 @@ npm run desktop:dev
 npm run desktop:build
 ```
 
-默认产物：
+默认生成便携版：
 
 ```text
-release/AI-Canvas-<version>-x64.exe
+release/AI-Canvas-<version>-x64-Portable.exe
 ```
+
+生成 Windows NSIS 安装版：
+
+```bash
+npm run desktop:build:installer
+```
+
+安装包产物：
+
+```text
+release/AI-Canvas-Setup-<version>-x64.exe
+```
+
+安装版使用辅助安装界面，允许选择当前用户或所有用户安装、修改安装目录，并创建桌面与开始菜单快捷方式。卸载应用不会删除用户自行选择的工作区目录。
+
+当前生成的便携版和安装版均未进行 Authenticode 代码签名；跨设备分发时仍可能触发 Windows SmartScreen、Defender 或第三方安全软件警告。正式发布前必须接入可信代码签名，不能用自签名证书替代公开分发签名。
 
 只生成解压目录、用于快速检查打包内容：
 
@@ -93,6 +109,7 @@ npm run desktop:check
 npm run desktop:smoke
 npm run desktop:smoke:ui
 npm run desktop:build
+npm run desktop:build:installer
 ```
 
 项目通过 `build.electronDist` 直接复用 `node_modules/electron/dist`，避免 electron-builder 再次下载同版本 Electron 运行时。Windows 资源编辑工具仍由 electron-builder 缓存管理；若日志出现 `ECONNREFUSED 127.0.0.1:443`，先检查 DNS、代理环境变量和本地代理状态；这不是可以通过关闭 TLS 校验解决的证书问题。electron-builder 当前使用 HTTP/HTTPS CONNECT 代理，不直接接受 SOCKS5 地址；代理软件同时提供 HTTP 或 Mixed 端口时，可通过该端口保持 HTTPS 校验并构建：
@@ -122,12 +139,12 @@ npx cross-env HTTPS_PROXY=http://<proxy-host>:<http-or-mixed-port> HTTP_PROXY=ht
 - Electron 本地窗口。
 - 与 Web 端一致的工作区、项目和媒体持久化。
 - 当前项目管理、任务队列、工作区目录包和资源恢复主流程。
-- Web/Desktop 一致的真实磁盘资产扫描、孤儿路径预览和清理影响确认。
+- Web/Desktop 一致的真实磁盘资产扫描、未引用路径预览和清理影响确认。
 - Web/Desktop 一致的单项目目录包、ID 冲突预检、副本导入和显式替换。
 - 带版本、升级备份和目录包替换前备份的 SQLite 项目/设置主存储。
 - Web/旧桌面 JSON 工作区首次打开导入数据库，以及数据库导出跨平台目录包。
 - 完整服务商配置和 Provider API Key 随工作区保存在 SQLite；系统密钥链不进入产品范围，导出目录包仍强制清空 API Key。
-- Windows 便携版 exe 打包。
+- Windows 便携版 exe 与 NSIS 辅助安装包打包。
 
 P0 桌面文件闭环已经覆盖：
 

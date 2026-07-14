@@ -1,11 +1,12 @@
 import { memo, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type SyntheticEvent } from 'react'
-import { Handle, Position, useConnection } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { ChevronDown, Clock3, Film, Image as ImageIcon, Play, SlidersHorizontal, Sparkles, Video, X } from 'lucide-react'
 import { CanvasImagePreview } from '@/components/CanvasImagePreview'
 import { enqueueVideoGenerateTask } from '@/features/generateQueue/orchestrator'
 import { getCanvasNodeById } from '@/store/canvasConnectionSources'
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
+import { useProjectStore } from '@/store/useProjectStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { handleTextareaBlur, handleTextareaFocus, handleTextareaWheel } from '@/utils/textareaWheel'
 import { getWorkspaceAssetThumbnailRelativePath } from '@/utils/workspaceImageAsset'
@@ -187,13 +188,12 @@ export const VideoGenerateNode = memo(function VideoGenerateNode({ id, data, sel
   const beginTransaction = useHistoryStore((s) => s.beginTransaction)
   const commitTransaction = useHistoryStore((s) => s.commitTransaction)
   const runTracked = useHistoryStore((s) => s.runTracked)
+  const activeProjectId = useProjectStore((s) => s.activeProjectId)
   const getEnabledCustomModels = useSettingsStore((s) => s.getEnabledCustomModels)
   const promptRef = useRef<HTMLTextAreaElement | null>(null)
   const settingsRef = useRef<HTMLDivElement | null>(null)
   const [hasPromptDraft, setHasPromptDraft] = useState(Boolean((data.prompt || '').trim()))
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const connection = useConnection()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
   const videoModels = getEnabledCustomModels('video')
   const mode = data.mode === 'keyframes' || data.mode === 'reference' ? data.mode : 'text'
   const ratio = data.ratio || '16:9'
@@ -317,6 +317,7 @@ export const VideoGenerateNode = memo(function VideoGenerateNode({ id, data, sel
 
     syncPromptToStore(currentPrompt)
     enqueueVideoGenerateTask({
+      projectId: activeProjectId,
       sourceNodeId: id,
       prompt: currentPrompt,
       model: effectiveModel,
@@ -377,7 +378,7 @@ export const VideoGenerateNode = memo(function VideoGenerateNode({ id, data, sel
         id="video"
         className="handle-orb-anchor !w-[18px] !h-[18px] !rounded-full !border-0 !bg-transparent !p-0"
       >
-        <span className={`handle-orb handle-orb--source ${isConnecting ? 'is-connecting' : ''}`}>
+        <span className="handle-orb handle-orb--source">
           <span className="handle-orb__glow" />
           <span className="handle-orb__ring" />
           <span className="handle-orb__dot" />

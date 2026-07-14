@@ -13,6 +13,19 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 function runSettingsConfigTests() {
+  const emptyConfig = normalizeConfig()
+  assert(emptyConfig.model === '', 'fresh config should not select a built-in model')
+  assert(emptyConfig.customModels.length === 0, 'fresh config should not ship built-in models')
+  assert(emptyConfig.providerProfiles.length === 0, 'fresh config should not ship provider profiles')
+
+  const explicitEmptyConfig = normalizeConfig({
+    model: '',
+    customModels: [],
+    providerProfiles: [],
+  })
+  assert(explicitEmptyConfig.customModels.length === 0, 'normalization should preserve an empty model library')
+  assert(explicitEmptyConfig.providerProfiles.length === 0, 'normalization should preserve an empty provider library')
+
   const legacyConfig = normalizeConfig({
     apiKey: 'legacy-key',
     apiUrl: 'https://example.com/v1',

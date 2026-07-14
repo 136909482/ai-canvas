@@ -17,8 +17,6 @@ import {
   writeWorkspaceConfigCache,
 } from './settingsCache'
 import {
-  createDefaultCustomModel,
-  createDefaultProviderProfile,
   fromWorkspaceConfigFile,
   normalizeConfig,
   normalizeCustomModel,
@@ -318,7 +316,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
       return {
         config: normalizeConfig({
           ...normalized,
-          customModels: customModels.length > 0 ? customModels : [createDefaultCustomModel()],
+          customModels,
           modelProviderProfileIds: Object.fromEntries(
             Object.entries(normalized.modelProviderProfileIds).filter(([modelId]) => modelId !== deletedModel?.modelId),
           ),
@@ -350,13 +348,12 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
   deleteProviderProfile: (id) =>
     set((state) => {
       const normalized = normalizeConfig(state.config)
-      const deletedProfile = normalized.providerProfiles.find((profile) => profile.id === id)
       const providerProfiles = normalized.providerProfiles.filter((profile) => profile.id !== id)
 
       return {
         config: normalizeConfig({
           ...normalized,
-          providerProfiles: providerProfiles.length > 0 ? providerProfiles : [createDefaultProviderProfile({ kind: deletedProfile?.kind ?? 'image' })],
+          providerProfiles,
           activeProviderProfileIds: Object.fromEntries(
             Object.entries(normalized.activeProviderProfileIds).filter(([, profileId]) => profileId !== id),
           ) as Partial<Record<CustomModelKind, string>>,

@@ -1,10 +1,10 @@
 import { loadImageDimensions } from '@/features/generateQueue/previewUtils'
 import { writeWorkspaceImageAsset } from '@/features/imageAssets/runtime'
+import { buildProjectAssetPath } from '@/features/projectManager/projectAssetPaths'
 import { platformBridge } from '@/platform'
 import type { WorkspaceImageAsset } from '@/types'
 import { getImportedImageNodeSize } from './imageImportSizing'
 
-export const MANUAL_IMAGE_UPLOAD_ASSET_PATH = ['manual-uploads']
 export { getImportedImageNodeSize } from './imageImportSizing'
 
 export type ImportedImageResult = {
@@ -38,14 +38,18 @@ function readFileAsDataUrl(file: File) {
   })
 }
 
-export async function importImageFile(file: File, workspaceConfigured: boolean): Promise<ImportedImageResult> {
+export async function importImageFile(
+  file: File,
+  workspaceConfigured: boolean,
+  projectId: string | null,
+): Promise<ImportedImageResult> {
   const tempImageUrl = URL.createObjectURL(file)
 
   try {
     const { width: naturalWidth, height: naturalHeight } = await loadImageDimensions(tempImageUrl)
     const imageAsset = workspaceConfigured
       ? await writeWorkspaceImageAsset({
-          pathSegments: MANUAL_IMAGE_UPLOAD_ASSET_PATH,
+          pathSegments: buildProjectAssetPath(projectId, 'uploads'),
           fileName: file.name,
           blob: file,
           originalWidth: naturalWidth,

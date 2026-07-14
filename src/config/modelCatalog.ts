@@ -6,8 +6,8 @@ export interface ProviderDefinition {
   defaultApiUrl: string
 }
 
-export const DEFAULT_IMAGE_MODEL_ID = 'qwen-image-2.0-pro'
-export const DEFAULT_IMAGE_MODEL_NAME = 'Qwen Image 2.0 Pro'
+export const DEFAULT_IMAGE_MODEL_ID = ''
+export const DEFAULT_IMAGE_MODEL_NAME = '未配置模型'
 export const DEFAULT_ALIYUN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 export const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com'
 

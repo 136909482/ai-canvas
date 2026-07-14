@@ -69,6 +69,7 @@ export function StorageSettingsPanel({ active = true }: { active?: boolean }) {
   const hydrateFromWorkspace = useSettingsStore((state) => state.hydrateFromWorkspace)
   const persistWorkspaceConfig = useSettingsStore((state) => state.persistWorkspaceConfig)
   const persistWorkspaceFile = useProjectStore((state) => state.persistWorkspaceFile)
+  const saveActiveProject = useProjectStore((state) => state.saveActiveProject)
   const reloadFromWorkspace = useProjectStore((state) => state.reloadFromWorkspace)
   const projects = useProjectStore((state) => state.projects)
   const activeProjectId = useProjectStore((state) => state.activeProjectId)
@@ -186,8 +187,17 @@ export function StorageSettingsPanel({ active = true }: { active?: boolean }) {
     }
   }
 
-  const inspectWorkspaceDiskAssets = async () => {
-    await persistWorkspaceFile()
+  const inspectWorkspaceDiskAssets = async (options?: { commitActiveProject?: boolean }) => {
+    const saveResult = options?.commitActiveProject
+      ? await saveActiveProject()
+      : await persistWorkspaceFile()
+    if (saveResult === 'no-project') {
+      throw new Error('当前没有可扫描的项目。')
+    }
+    if (saveResult === 'storage-required') {
+      throw new Error('请先设置缓存目录。')
+    }
+
     const persistedWorkspaceData = await platformBridge.loadWorkspaceData()
     if (!persistedWorkspaceData) {
       throw new Error('当前工作区没有可扫描的项目数据。')
@@ -213,8 +223,8 @@ export function StorageSettingsPanel({ active = true }: { active?: boolean }) {
       const { inspection } = await inspectWorkspaceDiskAssets()
       setStatusMessage(
         inspection.orphanedFileCount > 0
-          ? `扫描完成：发现 ${inspection.orphanedFileCount} 个孤儿资产，可回收 ${formatSnapshotByteSize(inspection.orphanedByteSize)}。`
-          : '扫描完成：没有发现孤儿资产。',
+          ? `扫描完成：发现 ${inspection.orphanedFileCount} 个未引用文件，可回收 ${formatSnapshotByteSize(inspection.orphanedByteSize)}。`
+          : '扫描完成：没有发现未引用文件。',
       )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -234,10 +244,13 @@ export function StorageSettingsPanel({ active = true }: { active?: boolean }) {
     setIsCleaning(true)
 
     try {
-      const { inspection, workspaceData } = await inspectWorkspaceDiskAssets()
+      const { inspection, workspaceData } = await inspectWorkspaceDiskAssets({ commitActiveProject: true })
       if (inspection.orphanedFileCount === 0) {
-        setStatusMessage('没有可清理的未引用图片缓存。')
-        notify({ tone: 'success', title: '无需清理', message: '磁盘扫描没有发现孤儿资产。' })
+        const protectedMessage = inspection.referencedFileCount > 0
+          ? `${inspection.referencedFileCount} 个文件仍被项目快照或任务队列引用。`
+          : '磁盘扫描没有发现未引用文件。'
+        setStatusMessage(`没有可清理的未引用资产。${protectedMessage}`)
+        notify({ tone: 'success', title: '无需清理', message: protectedMessage })
         return
       }
 
@@ -247,8 +260,8 @@ export function StorageSettingsPanel({ active = true }: { active?: boolean }) {
         .join('、')
       const remainingCount = Math.max(0, inspection.orphanedFileCount - 3)
       const confirmed = await confirm({
-        title: '清理孤儿资产',
-        message: `将删除 ${inspection.orphanedFileCount} 个孤儿资产，释放 ${formatSnapshotByteSize(inspection.orphanedByteSize)}。${pathPreview}${remainingCount > 0 ? `，另有 ${remainingCount} 个文件` : ''}。项目正在引用的文件不会删除。是否继续？`,
+        title: '清理未引用文件',
+        message: `将删除 ${inspection.orphanedFileCount} 个未引用文件，释放 ${formatSnapshotByteSize(inspection.orphanedByteSize)}。${pathPreview}${remainingCount > 0 ? `，另有 ${remainingCount} 个文件` : ''}。项目正在引用的文件不会删除。是否继续？`,
         confirmLabel: '清理',
         tone: 'danger',
       })
@@ -261,14 +274,14 @@ export function StorageSettingsPanel({ active = true }: { active?: boolean }) {
       setDiskInspection(nextInspection)
       setStatusMessage(
         result.deletedCount > 0
-          ? `已清理 ${result.deletedCount} 个孤儿资产，释放 ${formatSnapshotByteSize(result.deletedByteSize)}。`
+          ? `已清理 ${result.deletedCount} 个未引用文件，释放 ${formatSnapshotByteSize(result.deletedByteSize)}。`
           : '没有可清理的未引用图片缓存。',
       )
       notify({
         tone: 'success',
         title: '资产清理完成',
         message: result.deletedCount > 0
-          ? `已清理 ${result.deletedCount} 个孤儿资产，释放 ${formatSnapshotByteSize(result.deletedByteSize)}。`
+          ? `已清理 ${result.deletedCount} 个未引用文件，释放 ${formatSnapshotByteSize(result.deletedByteSize)}。`
           : '没有可清理的未引用图片缓存。',
       })
     } catch (error) {
@@ -436,6 +449,7 @@ export function StorageSettingsPanel({ active = true }: { active?: boolean }) {
 
             <button
               type="button"
+              data-testid="workspace-asset-cleanup"
               onClick={() => {
                 void handleCleanupUnusedImages()
               }}
@@ -443,7 +457,7 @@ export function StorageSettingsPanel({ active = true }: { active?: boolean }) {
               className={`${STORAGE_OPTION_BUTTON_CLASS} text-red-600 hover:bg-red-500/10 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-200`}
             >
               {isCleaning ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-              清理孤儿资产
+              清理未引用文件
             </button>
           </div>
         </div>
@@ -559,7 +573,7 @@ export function StorageSettingsPanel({ active = true }: { active?: boolean }) {
                       </div>
                     ))}
                     {diskInspection.orphanedFiles.length > 20 ? (
-                      <div className={`px-1 py-1.5 text-[11px] ${themeClasses.textMuted}`}>另有 {diskInspection.orphanedFiles.length - 20} 个孤儿文件未展开</div>
+                      <div className={`px-1 py-1.5 text-[11px] ${themeClasses.textMuted}`}>另有 {diskInspection.orphanedFiles.length - 20} 个未引用文件未展开</div>
                     ) : null}
                   </div>
                 ) : null}

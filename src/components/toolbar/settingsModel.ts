@@ -157,11 +157,11 @@ export const SETTINGS_CATEGORIES: Array<{
   Icon: LucideIcon
 }> = [
   { id: 'models', label: '模型管理', description: 'API、模型库与默认模型', Icon: SlidersHorizontal },
-  { id: 'storage', label: '存储与保存', description: '工作区目录和自动保存', Icon: HardDrive },
-  { id: 'canvas', label: '画布管理', description: '对齐辅助和画布体验', Icon: Layers3 },
-  { id: 'appearance', label: '外观主题', description: '明暗主题与显示偏好', Icon: Palette },
+  { id: 'storage', label: '存储管理', description: '工作区目录和自动保存', Icon: HardDrive },
+  { id: 'canvas', label: '画布管理', description: '性能、预览与对齐辅助', Icon: Layers3 },
+  { id: 'appearance', label: '外观设置', description: '主题、网格与连线样式', Icon: Palette },
   { id: 'tasks', label: '任务队列', description: '生成任务和恢复策略', Icon: Brush },
-  { id: 'tools', label: '工具与诊断', description: '工作区搜索和诊断记录', Icon: Wrench },
+  { id: 'tools', label: '工具诊断', description: '工作区搜索和诊断记录', Icon: Wrench },
 ]
 
 export const FIELD_INPUT_CLASS =

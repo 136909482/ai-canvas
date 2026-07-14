@@ -1,5 +1,6 @@
 import { downloadMediaAsBlob } from '@/api/image/shared'
 import { writeWorkspaceImageAsset } from '@/features/imageAssets/runtime'
+import { buildProjectAssetPath } from '@/features/projectManager/projectAssetPaths'
 import { platformBridge } from '@/platform'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import type { GenerateTask, WorkspaceImageAsset } from '@/types'
@@ -95,7 +96,7 @@ export async function persistGeneratedImageAsset(
   }
 
   const asset = await writeWorkspaceImageAsset({
-    pathSegments: [buildAssetFolderDate(task.createdAt)],
+    pathSegments: buildProjectAssetPath(task.projectId, 'generated', buildAssetFolderDate(task.createdAt)),
     fileName: buildGeneratedImageFileName(task, blob.type || 'image/png'),
     blob,
   })
@@ -129,7 +130,7 @@ export async function persistGeneratedVideoAsset(
   }
 
   const asset = await platformBridge.writeWorkspaceAsset({
-    pathSegments: [buildAssetFolderDate(task.createdAt)],
+    pathSegments: buildProjectAssetPath(task.projectId, 'generated', buildAssetFolderDate(task.createdAt)),
     fileName: buildGeneratedVideoFileName(task, blob.type || 'video/mp4'),
     blob,
   })

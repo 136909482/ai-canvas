@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type ChangeEvent, type SyntheticEvent } from 'react'
-import { Handle, Position, useConnection } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { Bot, CheckCircle2, FileText, Loader2, Paperclip, Play, TriangleAlert, X } from 'lucide-react'
 import { CanvasImagePreview } from '@/components/CanvasImagePreview'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
@@ -304,8 +304,6 @@ export const LLMFileNode = memo(function LLMFileNode({ id, data, selected }: LLM
   const beginTransaction = useHistoryStore((s) => s.beginTransaction)
   const commitTransaction = useHistoryStore((s) => s.commitTransaction)
   const runTracked = useHistoryStore((s) => s.runTracked)
-  const connection = useConnection()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
   const getEnabledCustomModels = useSettingsStore((s) => s.getEnabledCustomModels)
   const chatModels = getEnabledCustomModels('chat')
   const hasChatModel = chatModels.length > 0
@@ -488,7 +486,7 @@ export const LLMFileNode = memo(function LLMFileNode({ id, data, selected }: LLM
         id="output"
         className="handle-orb-anchor !w-[18px] !h-[18px] !rounded-full !border-0 !bg-transparent !p-0"
       >
-        <span className={`handle-orb handle-orb--source ${isConnecting ? 'is-connecting' : ''}`}>
+        <span className="handle-orb handle-orb--source">
           <span className="handle-orb__glow" />
           <span className="handle-orb__ring" />
           <span className="handle-orb__dot" />

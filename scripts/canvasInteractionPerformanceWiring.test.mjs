@@ -10,6 +10,21 @@ const generateNodeSource = readFileSync(fileURLToPath(new URL('../src/nodes/Gene
 const imagePreviewSource = readFileSync(fileURLToPath(new URL('../src/components/CanvasImagePreview.tsx', import.meta.url)), 'utf8')
 const nodePropComparatorsSource = readFileSync(fileURLToPath(new URL('../src/nodes/nodePropComparators.ts', import.meta.url)), 'utf8')
 const stableNodeToolbarSource = readFileSync(fileURLToPath(new URL('../src/components/StableNodeToolbar.tsx', import.meta.url)), 'utf8')
+const indexCssSource = readFileSync(fileURLToPath(new URL('../src/index.css', import.meta.url)), 'utf8')
+const connectionHandleNodeSources = [
+  imageNodeSource,
+  generateNodeSource,
+  readFileSync(fileURLToPath(new URL('../src/nodes/GeneratedPreviewNode/index.tsx', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../src/nodes/ImageEditNode/index.tsx', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../src/nodes/InlineTextSplitterNode/index.tsx', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../src/nodes/LLMFileNode/index.tsx', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../src/nodes/LLMOutputTextNode/index.tsx', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../src/nodes/TestImageNode/index.tsx', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../src/nodes/TextNode/index.tsx', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../src/nodes/TextSplitterNode/index.tsx', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../src/nodes/VideoGenerateNode/index.tsx', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../src/nodes/VideoNode/index.tsx', import.meta.url)), 'utf8'),
+]
 
 if (!canvasSource.includes('shouldUseCanvasPerformanceRendering')) {
   throw new Error('Canvas should use centralized performance rendering rules')
@@ -99,6 +114,14 @@ if (
 
 if (!mainSource.includes("import.meta.env.VITE_REACT_STRICT_MODE === 'true'")) {
   throw new Error('React StrictMode should be opt-in so development interaction sampling matches production behavior')
+}
+
+if (
+  connectionHandleNodeSources.some((source) => source.includes('useConnection'))
+  || !indexCssSource.includes('.react-flow__handle.connectingfrom .handle-orb')
+  || indexCssSource.includes('.react-flow__handle.connecting .handle-orb')
+) {
+  throw new Error('Node shells should use the native connectingfrom handle class instead of subscribing whole nodes to live connection coordinates')
 }
 
 if (!canvasCombinedSource.includes('!shouldShowAlignmentGuides && isNodeDraggingRef.current && isPureActivePositionDrag(changes)')) {

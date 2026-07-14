@@ -16,6 +16,7 @@ function createTask(errorMsg = ''): GenerateTask {
   return {
     id: 'task-1',
     displayId: 'task-1',
+    projectId: 'project-1',
     kind: 'image',
     sourceNodeId: 'gen-1',
     previewNodeId: null,

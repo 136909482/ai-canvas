@@ -11,6 +11,7 @@ function createTask(overrides: Partial<GenerateTask>): GenerateTask {
   return {
     id: 'task-1',
     displayId: 'display-1',
+    projectId: 'project-1',
     kind: 'image',
     sourceNodeId: 'gen-1',
     previewNodeId: 'preview-1',
@@ -77,6 +78,12 @@ function runTaskQueueRecoveryTests() {
   const errorTask = recoveredTasks.find((task) => task.id === 'error')
   assert(errorTask?.status === 'error', 'failed tasks should remain failed')
   assert(errorTask.errorMsg === '失败', 'failed tasks should preserve error messages')
+
+  const reassignedTask = recoverTasksAfterSnapshotLoad(
+    [createTask({ projectId: 'source-project' })],
+    'opened-project',
+  )[0]
+  assert(reassignedTask.projectId === 'opened-project', 'loaded tasks should belong to the project that contains the snapshot')
 }
 
 runTaskQueueRecoveryTests()

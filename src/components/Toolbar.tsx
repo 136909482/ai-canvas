@@ -72,7 +72,7 @@ import {
   toDraftModel,
   toDraftProviderProfile,
 } from '@/components/toolbar/settingsModel'
-import { DetailRow, TopChromeIconButton } from '@/components/toolbar/settingsComponents'
+import { CanvasSettingsSwitch, DetailRow, TopChromeIconButton } from '@/components/toolbar/settingsComponents'
 
 interface ToolbarProps {
   leftSlot?: ReactNode
@@ -1036,58 +1036,16 @@ export function Toolbar({ leftSlot, rightSlot }: ToolbarProps) {
 
                         <div className={CANVAS_SETTINGS_ROW_CLASS}>
                           <div className="min-w-0">
-                            <div className={`truncate text-sm font-medium ${themeClasses.textPrimary}`}>{CANVAS_EXPERIENCE_TEXT.canvasGrid}</div>
-                            <p className={`mt-1 max-w-2xl truncate text-xs ${themeClasses.textMuted}`}>{CANVAS_EXPERIENCE_TEXT.canvasGridHint}</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void handleToggleCanvasGrid()
-                            }}
-                            className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-300 ease-out ${
-                              config.storage.canvasGridEnabled
-                                ? 'border-violet-300/30 bg-violet-400/24'
-                                : 'border-[var(--border-subtle)] bg-[var(--control-bg-hover)]'
-                            }`}
-                            aria-pressed={config.storage.canvasGridEnabled}
-                            aria-label="显示画布网格"
-                          >
-                            <span
-                              className={`absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full shadow-sm transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                config.storage.canvasGridEnabled
-                                  ? 'translate-x-[20px] bg-violet-100'
-                                  : 'translate-x-0 bg-[var(--text-muted)]'
-                              }`}
-                            />
-                          </button>
-                        </div>
-
-                        <div className={CANVAS_SETTINGS_ROW_CLASS}>
-                          <div className="min-w-0">
                             <div className={`truncate text-sm font-medium ${themeClasses.textPrimary}`}>{CANVAS_EXPERIENCE_TEXT.lowQualityPreview}</div>
                             <p className={`mt-1 max-w-2xl truncate text-xs ${themeClasses.textMuted}`}>{CANVAS_EXPERIENCE_TEXT.lowQualityPreviewHint}</p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
+                          <CanvasSettingsSwitch
+                            checked={config.storage.lowQualityPreviewEnabled}
+                            label="启用高清图片预览"
+                            onChange={() => {
                               void handleToggleHighQualityPreview()
                             }}
-                            className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-300 ease-out ${
-                              config.storage.lowQualityPreviewEnabled
-                                ? 'border-violet-300/30 bg-violet-400/24'
-                                : 'border-[var(--border-subtle)] bg-[var(--control-bg-hover)]'
-                            }`}
-                            aria-pressed={config.storage.lowQualityPreviewEnabled}
-                            aria-label="启用低清晰度交互预览"
-                          >
-                            <span
-                              className={`absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full shadow-sm transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                config.storage.lowQualityPreviewEnabled
-                                  ? 'translate-x-[20px] bg-violet-100'
-                                  : 'translate-x-0 bg-[var(--text-muted)]'
-                              }`}
-                            />
-                          </button>
+                          />
                         </div>
 
                         <div className={CANVAS_SETTINGS_ROW_CLASS}>
@@ -1095,27 +1053,62 @@ export function Toolbar({ leftSlot, rightSlot }: ToolbarProps) {
                             <div className={`truncate text-sm font-medium ${themeClasses.textPrimary}`}>{CANVAS_EXPERIENCE_TEXT.alignmentGuides}</div>
                             <p className={`mt-1 max-w-2xl truncate text-xs ${themeClasses.textMuted}`}>{CANVAS_EXPERIENCE_TEXT.alignmentGuidesHint}</p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
+                          <CanvasSettingsSwitch
+                            checked={config.storage.alignmentGuidesEnabled}
+                            label="启用对齐参考线"
+                            onChange={() => {
                               void handleToggleAlignmentGuides()
                             }}
-                            className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-300 ease-out ${
-                              config.storage.alignmentGuidesEnabled
-                                ? 'border-violet-300/30 bg-violet-400/24'
-                                : 'border-[var(--border-subtle)] bg-[var(--control-bg-hover)]'
-                            }`}
-                            aria-pressed={config.storage.alignmentGuidesEnabled}
-                            aria-label="启用对齐参考线"
-                          >
-                            <span
-                              className={`absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full shadow-sm transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                config.storage.alignmentGuidesEnabled
-                                  ? 'translate-x-[20px] bg-violet-100'
-                                  : 'translate-x-0 bg-[var(--text-muted)]'
-                              }`}
-                            />
-                          </button>
+                          />
+                        </div>
+
+                      </section>
+                    ) : null}
+                    {activeCategory === 'appearance' ? (
+                      <section className="overflow-hidden rounded-[14px] border border-[var(--border-subtle)] bg-[var(--control-bg)]">
+                        <div className={CANVAS_SETTINGS_ROW_CLASS}>
+                          <div className="min-w-0">
+                            <div className={`truncate text-sm font-medium ${themeClasses.textPrimary}`}>{CANVAS_EXPERIENCE_TEXT.appearanceTheme}</div>
+                            <p className={`mt-1 max-w-2xl truncate text-xs ${themeClasses.textMuted}`}>{CANVAS_EXPERIENCE_TEXT.appearanceThemeHint}</p>
+                          </div>
+                          <div className={CANVAS_OPTION_GROUP_CLASS}>
+                            {THEME_MODE_OPTIONS.map((option) => {
+                              const active = config.storage.themeMode === option.id
+
+                              return (
+                                <button
+                                  key={option.id}
+                                  type="button"
+                                  onClick={() => {
+                                    void handleThemeModeChange(option.id)
+                                  }}
+                                  className={cx(
+                                    CANVAS_OPTION_BUTTON_CLASS,
+                                    active
+                                      ? 'bg-[var(--control-bg-hover)] text-[var(--text-primary)]'
+                                      : 'text-[var(--text-muted)] hover:bg-[var(--control-bg-hover)] hover:text-[var(--text-secondary)]',
+                                  )}
+                                  aria-pressed={active}
+                                >
+                                  {option.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        <div className={CANVAS_SETTINGS_ROW_CLASS}>
+                          <div className="min-w-0">
+                            <div className={`truncate text-sm font-medium ${themeClasses.textPrimary}`}>{CANVAS_EXPERIENCE_TEXT.canvasGrid}</div>
+                            <p className={`mt-1 max-w-2xl truncate text-xs ${themeClasses.textMuted}`}>{CANVAS_EXPERIENCE_TEXT.canvasGridHint}</p>
+                          </div>
+                          <CanvasSettingsSwitch
+                            checked={config.storage.canvasGridEnabled}
+                            label="显示画布网格"
+                            onChange={() => {
+                              void handleToggleCanvasGrid()
+                            }}
+                          />
                         </div>
 
                         <div className={CANVAS_SETTINGS_ROW_CLASS}>
@@ -1148,44 +1141,7 @@ export function Toolbar({ leftSlot, rightSlot }: ToolbarProps) {
                             })}
                           </div>
                         </div>
-
-                        <div className={CANVAS_SETTINGS_ROW_CLASS}>
-                          <div className="min-w-0">
-                            <div className={`truncate text-sm font-medium ${themeClasses.textPrimary}`}>{CANVAS_EXPERIENCE_TEXT.appearanceTheme}</div>
-                            <p className={`mt-1 max-w-2xl truncate text-xs ${themeClasses.textMuted}`}>{CANVAS_EXPERIENCE_TEXT.appearanceThemeHint}</p>
-                          </div>
-                          <div className={CANVAS_OPTION_GROUP_CLASS}>
-                            {THEME_MODE_OPTIONS.map((option) => {
-                              const active = config.storage.themeMode === option.id
-
-                              return (
-                                <button
-                                  key={option.id}
-                                  type="button"
-                                  onClick={() => {
-                                    void handleThemeModeChange(option.id)
-                                  }}
-                                  className={cx(
-                                    CANVAS_OPTION_BUTTON_CLASS,
-                                    active
-                                      ? 'bg-[var(--control-bg-hover)] text-[var(--text-primary)]'
-                                      : 'text-[var(--text-muted)] hover:bg-[var(--control-bg-hover)] hover:text-[var(--text-secondary)]',
-                                  )}
-                                  aria-pressed={active}
-                                >
-                                  {option.label}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
                       </section>
-                    ) : null}
-                    {activeCategory === 'appearance' ? (
-                      <div className="rounded-[18px] border border-[var(--border-subtle)] bg-[var(--control-bg)] p-5">
-                        <div className={`text-sm font-medium ${themeClasses.textPrimary}`}>主题入口保持在画布左上角</div>
-                        <p className={`mt-2 text-xs leading-5 ${themeClasses.textMuted}`}>当前版本先保留画布工具区的快速主题切换，这里预留给后续更完整的外观选项。</p>
-                      </div>
                     ) : null}
                     {activeCategory === 'tasks' ? (
                       <div className="rounded-[18px] border border-[var(--border-subtle)] bg-[var(--control-bg)] p-5">

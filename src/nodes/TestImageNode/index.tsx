@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { Handle, Position, useConnection, type OnResizeEnd } from '@xyflow/react'
+import { Handle, Position, type OnResizeEnd } from '@xyflow/react'
 import { Maximize, Upload } from 'lucide-react'
 import { CanvasImagePreview } from '@/components/CanvasImagePreview'
 import { ZoomableImagePreview } from '@/components/ZoomableImagePreview'
@@ -8,6 +8,7 @@ import type { AppNodeProps } from '@/types'
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { useFeedbackStore } from '@/store/useFeedbackStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
+import { useProjectStore } from '@/store/useProjectStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { NodeDeleteButton, NodeResizerPreset } from '../nodeShell'
 import { getNodeShellClassName } from '../nodeShellClassName'
@@ -46,13 +47,12 @@ export const TestImageNode = memo(function TestImageNode({ id, data, selected }:
   const beginTransaction = useHistoryStore((s) => s.beginTransaction)
   const runTracked = useHistoryStore((s) => s.runTracked)
   const workspaceConfigured = useSettingsStore((s) => s.runtime.workspaceConfigured)
+  const activeProjectId = useProjectStore((s) => s.activeProjectId)
   const notify = useFeedbackStore((s) => s.notify)
   const [isDragging, setIsDragging] = useState(false)
   const [imageInfo, setImageInfo] = useState({ width: 0, height: 0, name: '' })
   const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const connection = useConnection()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
   const storedImageInfo = useMemo(() => {
     const width = getStoredImageDimension(
       data.imageAsset?.originalWidth,
@@ -92,7 +92,7 @@ export const TestImageNode = memo(function TestImageNode({ id, data, selected }:
     }
 
     try {
-      const importedImage = await importImageFile(file, workspaceConfigured)
+      const importedImage = await importImageFile(file, workspaceConfigured, activeProjectId)
 
       setImageInfo({
         width: importedImage.naturalWidth,
@@ -115,7 +115,7 @@ export const TestImageNode = memo(function TestImageNode({ id, data, selected }:
     } catch (error) {
       notify({ tone: 'error', title: '图片上传失败', message: error instanceof Error ? error.message : UI_TEXT.uploadFailed })
     }
-  }, [id, notify, runTracked, updateNodeData, workspaceConfigured])
+  }, [activeProjectId, id, notify, runTracked, updateNodeData, workspaceConfigured])
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -265,7 +265,7 @@ export const TestImageNode = memo(function TestImageNode({ id, data, selected }:
           id="output"
           className="handle-orb-anchor !w-[18px] !h-[18px] !rounded-full !border-0 !bg-transparent !p-0 !z-30"
         >
-          <span className={`handle-orb ${isConnecting ? 'is-connecting' : ''}`}>
+          <span className="handle-orb">
             <span className="handle-orb__glow" />
             <span className="handle-orb__ring" />
             <span className="handle-orb__dot" />

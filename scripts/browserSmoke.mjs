@@ -138,6 +138,44 @@ async function installFakeWorkspace(context) {
       window.localStorage.setItem(FS_STORAGE_KEY, JSON.stringify(tree))
     }
 
+    const initialTree = loadTree()
+    initialTree.directories['.config'] = true
+    initialTree.files['.config/config.json'] = JSON.stringify({
+      version: 1,
+      model: 'browser-smoke-image-model',
+      customModels: [{
+        id: 'browser-smoke-image-model-entry',
+        name: 'Browser Smoke Image Model',
+        modelId: 'browser-smoke-image-model',
+        kind: 'image',
+        enabled: true,
+      }],
+      providerProfiles: [{
+        id: 'browser-smoke-provider',
+        name: 'Browser Smoke Provider',
+        kind: 'image',
+        apiKey: 'browser-smoke-key',
+        apiUrl: 'https://example.invalid/v1',
+        provider: 'openai',
+        requestMode: 'sync',
+        asyncConfig: null,
+        enabled: true,
+      }],
+      activeProviderProfileIds: { image: 'browser-smoke-provider' },
+      modelProviderProfileIds: { 'browser-smoke-image-model': 'browser-smoke-provider' },
+      storage: {
+        autosaveIntervalMs: 60_000,
+        canvasTopBarCollapsed: false,
+        alignmentGuidesEnabled: true,
+        themeMode: 'dark',
+        canvasPerformanceMode: 'quality',
+        canvasGridEnabled: true,
+        edgeStyle: 'animated',
+        lowQualityPreviewEnabled: true,
+      },
+    })
+    saveTree(initialTree)
+
     const createNotFoundError = () => new DOMException('Entry not found', 'NotFoundError')
     const normalizeSegment = (segment) => String(segment || '').replace(/[\\/]+/g, '-')
 
@@ -877,7 +915,7 @@ async function runSmoke(page) {
 
   await seedWorkspaceBundleFixture(page, secondProjectId)
   await page.getByRole('button', { name: '设置', exact: true }).click()
-  await page.getByRole('button', { name: '存储与保存', exact: true }).click()
+  await page.getByRole('button', { name: '存储管理', exact: true }).click()
   await page.locator('[data-testid="workspace-bundle-export"]').waitFor({ state: 'visible', timeout: 5_000 })
   await page.evaluate(() => window.__queueSmokeDirectoryPicker('bundle-parent'))
   await clickAndWait(page, 'workspace-bundle-export')
@@ -922,7 +960,7 @@ async function runSmoke(page) {
   await clickAndWait(page, 'workspace-asset-scan')
   await page.locator('[data-testid="workspace-disk-inspection-result"]').getByText('1 个可清理', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 })
   await page.locator('[data-testid="workspace-disk-inspection-result"]').getByText('images/browser-orphan.bin', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 })
-  await page.getByRole('button', { name: '清理孤儿资产', exact: true }).click()
+  await page.getByRole('button', { name: '清理未引用文件', exact: true }).click()
   await page.locator('[data-testid="feedback-confirm-dialog"]').waitFor({ state: 'visible', timeout: 5_000 })
   await clickAndWait(page, 'feedback-confirm-submit')
   await page.waitForFunction(

@@ -54,7 +54,8 @@ if (!source.includes('data-low-quality-preview="true"')) {
 }
 
 if (
-  !source.includes("['drag', 'pan', 'select-pan', 'zoom']") ||
+  !source.includes("['drag', 'connect', 'pan', 'select-pan', 'zoom']") ||
+  !source.includes('async function runConnectGesture') ||
   !source.includes('async function runSelectPanGesture') ||
   !source.includes('startupMaxFrameMs') ||
   !source.includes('async function runZoomGesture') ||

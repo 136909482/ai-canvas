@@ -1,5 +1,5 @@
 import { memo, type SyntheticEvent } from 'react'
-import { Handle, Position, useConnection } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { Link2, Play, ScissorsLineDashed } from 'lucide-react'
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
@@ -31,8 +31,6 @@ export const TextSplitterNode = memo(function TextSplitterNode({ id, data, selec
   const deleteNode = useCanvasStore((s) => s.deleteNode)
   const syncTextSplitterOutputs = useCanvasStore((s) => s.syncTextSplitterOutputs)
   const runTracked = useHistoryStore((s) => s.runTracked)
-  const connection = useConnection()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
   const inputText = typeof data.inputText === 'string' ? data.inputText : ''
   const separator = typeof data.separator === 'string' ? data.separator : '\\n\\n'
   const outputCount = Array.isArray(data.outputNodeIds) ? data.outputNodeIds.length : 0
@@ -141,7 +139,7 @@ export const TextSplitterNode = memo(function TextSplitterNode({ id, data, selec
         id="output"
         className="handle-orb-anchor !w-[18px] !h-[18px] !rounded-full !border-0 !bg-transparent !p-0"
       >
-        <span className={`handle-orb handle-orb--source ${isConnecting ? 'is-connecting' : ''}`}>
+        <span className="handle-orb handle-orb--source">
           <span className="handle-orb__glow" />
           <span className="handle-orb__ring" />
           <span className="handle-orb__dot" />

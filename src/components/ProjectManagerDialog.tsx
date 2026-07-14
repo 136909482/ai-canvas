@@ -110,7 +110,7 @@ function ProjectImportConflictDialog({
 
         <div className="mt-4 space-y-2 text-xs leading-5">
           <p className={themeClasses.textSecondary}><strong className={themeClasses.textPrimary}>导入副本：</strong>生成新的项目 ID，并把资产写入独立目录。</p>
-          <p className={themeClasses.textSecondary}><strong className={themeClasses.textPrimary}>替换现有：</strong>保留项目 ID，用导入内容更新现有项目；旧资产稍后可通过孤儿清理移除。</p>
+          <p className={themeClasses.textSecondary}><strong className={themeClasses.textPrimary}>替换现有：</strong>保留项目 ID，用导入内容更新现有项目；旧的未引用资产稍后可通过磁盘清理移除。</p>
         </div>
 
         <div className="mt-5 flex flex-wrap justify-end gap-2">

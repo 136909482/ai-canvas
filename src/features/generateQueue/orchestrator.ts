@@ -28,6 +28,7 @@ const UI_TEXT = {
 const activeRemoteResumeTaskIds = new Set<string>()
 
 type EnqueueGenerateTaskInput = {
+  projectId?: string | null
   sourceNodeId: string
   prompt: string
   negativePrompt?: string
@@ -46,6 +47,7 @@ type EnqueueGenerateTaskInput = {
 }
 
 type EnqueueVideoGenerateTaskInput = {
+  projectId?: string | null
   sourceNodeId: string
   prompt: string
   model: string
@@ -369,6 +371,7 @@ export function enqueueGenerateTask(input: EnqueueGenerateTaskInput) {
     apiProfileName: providerSnapshot.apiProfileName,
   })
   const taskId = useTaskQueueStore.getState().createTask({
+    projectId: input.projectId ?? null,
     sourceNodeId: input.sourceNodeId,
     previewNodeId,
     model,
@@ -417,6 +420,7 @@ export function enqueueVideoGenerateTask(input: EnqueueVideoGenerateTaskInput) {
   const videoNodeId = createQueuedVideoNode(input.sourceNodeId, model)
   const providerSnapshot = getTaskProviderSnapshot('video', model)
   const taskId = useTaskQueueStore.getState().createTask({
+    projectId: input.projectId ?? null,
     kind: 'video',
     sourceNodeId: input.sourceNodeId,
     previewNodeId: videoNodeId,
@@ -481,6 +485,7 @@ export function enqueueImageEditTask(input: EnqueueGenerateTaskInput) {
     apiProfileName: providerSnapshot.apiProfileName,
   })
   const taskId = useTaskQueueStore.getState().createTask({
+    projectId: input.projectId ?? null,
     sourceNodeId: input.sourceNodeId,
     previewNodeId,
     model,

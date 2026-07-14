@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react'
-import { Handle, Position, useConnection, useUpdateNodeInternals } from '@xyflow/react'
+import { Handle, Position, useUpdateNodeInternals } from '@xyflow/react'
 import { Check, ChevronDown, Clock3, Link2, Loader2, Play, Server, SlidersHorizontal, Sparkles, X } from 'lucide-react'
 import { CanvasImagePreview } from '@/components/CanvasImagePreview'
 import { MAX_GENERATE_REFERENCE_IMAGES } from '@/constants/generateNode'
@@ -11,6 +11,7 @@ import { RichPromptEditor } from '@/features/richPrompt/RichPromptEditor'
 import type { RichPromptDocument, RichPromptReferenceItem } from '@/features/richPrompt/types'
 import { makeSelectGenerateMaskSourceNode, makeSelectGenerateReferenceSourceNodes, useCanvasStore } from '@/store/useCanvasStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
+import { useProjectStore } from '@/store/useProjectStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { getWorkspaceAssetThumbnailRelativePath } from '@/utils/workspaceImageAsset'
 import { recordComponentRender } from '@/utils/performanceDiagnostics'
@@ -124,9 +125,8 @@ export const GenerateNode = memo(function GenerateNode({ id, data, selected }: G
   const beginTransaction = useHistoryStore((s) => s.beginTransaction)
   const commitTransaction = useHistoryStore((s) => s.commitTransaction)
   const runTracked = useHistoryStore((s) => s.runTracked)
+  const activeProjectId = useProjectStore((s) => s.activeProjectId)
   const updateNodeInternals = useUpdateNodeInternals()
-  const connection = useConnection()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
   const getModelConfig = useSettingsStore((s) => s.getModelConfig)
   const getResolvedProviderProfile = useSettingsStore((s) => s.getResolvedProviderProfile)
   const getProviderProfiles = useSettingsStore((s) => s.getProviderProfiles)
@@ -179,7 +179,7 @@ export const GenerateNode = memo(function GenerateNode({ id, data, selected }: G
         label: model.name || model.modelId,
         icon: <ModelOptionIcon model={model} />,
       }))
-    : [{ value: effectiveModel, label: effectiveModel }]
+    : [{ value: '__empty__', label: '暂无可用 Image 模型' }]
   const ratio = data.ratio || '1:1'
   const resolution = RESOLUTIONS.includes(data.resolution) ? data.resolution : '1K'
   const quality = data.quality || 'auto'
@@ -289,6 +289,7 @@ export const GenerateNode = memo(function GenerateNode({ id, data, selected }: G
     syncRichPromptToStore(currentPrompt, effectiveRichPromptDraft)
     updateNodeData(id, { model: effectiveModel })
     enqueueGenerateTask({
+      projectId: activeProjectId,
       sourceNodeId: id,
       prompt: compiledPrompt,
       negativePrompt: data.negativePrompt,
@@ -370,7 +371,7 @@ export const GenerateNode = memo(function GenerateNode({ id, data, selected }: G
         id="image"
         className="handle-orb-anchor !w-[18px] !h-[18px] !rounded-full !border-0 !bg-transparent !p-0"
       >
-        <span className={`handle-orb handle-orb--source ${isConnecting ? 'is-connecting' : ''}`}>
+        <span className="handle-orb handle-orb--source">
           <span className="handle-orb__glow" />
           <span className="handle-orb__ring" />
           <span className="handle-orb__dot" />
@@ -594,7 +595,7 @@ export const GenerateNode = memo(function GenerateNode({ id, data, selected }: G
           <div className="flex items-center gap-1.5">
             <div className="min-w-[170px] flex-1">
               <InlineSelect
-                value={effectiveModel}
+                value={imageModels.length > 0 ? effectiveModel : '__empty__'}
                 options={modelOptions}
                 ariaLabel={UI_TEXT.chooseModel}
                 onChange={(value) => runTracked(() => updateNodeData(id, { model: value }))}
@@ -698,7 +699,7 @@ export const GenerateNode = memo(function GenerateNode({ id, data, selected }: G
             <button
               type="button"
               onClick={handleEnqueue}
-              disabled={!hasPrompt}
+              disabled={!hasPrompt || !selectedModel}
               data-testid={`enqueue-generate-${id}`}
               className={`${themeClasses.nodePrimaryButton} h-9 w-9 shrink-0 shadow-none duration-200`}
               aria-label={data.status === 'error' ? UI_TEXT.generateFailed : isQueued ? UI_TEXT.queued : isGenerating ? UI_TEXT.generating : UI_TEXT.generate}
@@ -727,7 +728,7 @@ export const GenerateNode = memo(function GenerateNode({ id, data, selected }: G
               <button
                 type="button"
                 onClick={handleEnqueue}
-                disabled={!hasPrompt}
+                disabled={!hasPrompt || !selectedModel}
                 className="shrink-0 rounded-md border border-red-400/30 bg-red-500/10 px-2 py-1 text-[10px] font-medium text-red-500 transition hover:border-red-400/50 hover:bg-red-500/15 hover:text-red-400 disabled:cursor-not-allowed disabled:border-[var(--border-subtle)] disabled:bg-[var(--control-bg)] disabled:text-[var(--text-muted)] dark:text-red-300"
                 data-testid={`retry-generate-${id}`}
               >
@@ -738,7 +739,7 @@ export const GenerateNode = memo(function GenerateNode({ id, data, selected }: G
 
           {!selectedModel && (
             <p className={`${themeClasses.nodeInlineNotice} ${themeClasses.nodeWarningText}`}>
-              当前模型配置缺失，任务会进入队列并在执行时失败。
+              暂无可用 Image 模型，请先在模型设置中添加。
             </p>
           )}
         </div>

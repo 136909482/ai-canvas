@@ -23,6 +23,7 @@ function createTask(id: string, asset: WorkspaceImageAsset): GenerateTask {
   return {
     id,
     displayId: id,
+    projectId: 'project-1',
     kind: 'image',
     sourceNodeId: 'gen-1',
     previewNodeId: null,

@@ -11,6 +11,7 @@ import { CanvasImagePreview } from '@/components/CanvasImagePreview'
 import { getCanvasNodeById } from '@/store/canvasConnectionSources'
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
+import { useProjectStore } from '@/store/useProjectStore'
 import { isImageSourceNodeType, type AppNodeProps, type WorkspaceImageAsset } from '@/types'
 import { themeClasses } from '@/styles/themeClasses'
 import { getWorkspaceAssetThumbnailRelativePath } from '@/utils/workspaceImageAsset'
@@ -135,6 +136,7 @@ export const ImageCropNode = memo(function ImageCropNode({ id, data, selected }:
   const beginTransaction = useHistoryStore((state) => state.beginTransaction)
   const scheduleCommit = useHistoryStore((state) => state.scheduleCommit)
   const commitTransaction = useHistoryStore((state) => state.commitTransaction)
+  const activeProjectId = useProjectStore((state) => state.activeProjectId)
   const previewAreaRef = useRef<HTMLDivElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const dragStateRef = useRef<DragState | null>(null)
@@ -337,7 +339,7 @@ export const ImageCropNode = memo(function ImageCropNode({ id, data, selected }:
   const handleRun = async () => {
     beginTransaction()
     try {
-      await runImageCropNode(id)
+      await runImageCropNode(id, activeProjectId)
     } finally {
       commitTransaction()
     }

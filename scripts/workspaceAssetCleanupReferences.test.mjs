@@ -39,10 +39,11 @@ if (!source.includes('new Set(collectWorkspaceReferencedAssetPaths(data))')) {
 
 if (
   !storageSettingsSource.includes('await persistWorkspaceFile()')
+  || !storageSettingsSource.includes('await saveActiveProject()')
   || !storageSettingsSource.includes('await platformBridge.loadWorkspaceData()')
   || !storageSettingsSource.includes('await platformBridge.inspectWorkspaceAssets(workspaceData)')
 ) {
-  throw new Error('Workspace cleanup should persist the active project and inspect the full persisted workspace before deleting assets')
+  throw new Error('Workspace scan should persist working state, while cleanup commits the active project before deleting assets')
 }
 
 if (!storageSettingsSource.includes('persistedWorkspaceData.projects')) {

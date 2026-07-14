@@ -3,7 +3,7 @@
   "description": "A local-first visual canvas for AI image, video, and LLM workflows.",
   "author": "AI Canvas",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {
@@ -17,6 +17,7 @@
     "desktop:smoke:ui": "node scripts/desktopWorkspaceUiSmoke.mjs",
     "desktop:dev": "node scripts/electronDev.mjs",
     "desktop:build": "npm run build && electron-builder --win portable",
+    "desktop:build:installer": "npm run build && electron-builder --win nsis",
     "desktop:build:dir": "npm run build && electron-builder --win dir",
     "perf:canvas": "node scripts/canvasDragPerf.mjs",
     "perf:canvas:enforce": "node scripts/canvasDragPerf.mjs --enforce",
@@ -77,8 +78,22 @@
       "icon": "build/icon.ico",
       "target": [
         "portable"
-      ],
-      "artifactName": "AI-Canvas-${version}-${arch}.${ext}"
+      ]
+    },
+    "portable": {
+      "artifactName": "AI-Canvas-${version}-${arch}-Portable.${ext}"
+    },
+    "nsis": {
+      "artifactName": "AI-Canvas-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AI Canvas",
+      "uninstallDisplayName": "AI Canvas ${version}",
+      "runAfterFinish": true
     }
   }
 }

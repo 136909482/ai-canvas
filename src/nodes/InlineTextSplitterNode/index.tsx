@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, type SyntheticEvent } from 'react'
-import { Handle, Position, useConnection, useUpdateNodeInternals } from '@xyflow/react'
+import { Handle, Position, useUpdateNodeInternals } from '@xyflow/react'
 import { Link2, Play, ScissorsLineDashed } from 'lucide-react'
 import { useCanvasStore } from '@/store/useCanvasStore'
 import { useHistoryStore } from '@/store/useHistoryStore'
@@ -26,9 +26,7 @@ export const InlineTextSplitterNode = memo(function InlineTextSplitterNode({ id,
   const deleteNode = useCanvasStore((s) => s.deleteNode)
   const syncInlineTextSplitterParts = useCanvasStore((s) => s.syncInlineTextSplitterParts)
   const runTracked = useHistoryStore((s) => s.runTracked)
-  const connection = useConnection()
   const updateNodeInternals = useUpdateNodeInternals()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
   const inputText = typeof data.inputText === 'string' ? data.inputText : ''
   const separator = typeof data.separator === 'string' ? data.separator : '*'
   const parts = useMemo(
@@ -170,7 +168,7 @@ export const InlineTextSplitterNode = memo(function InlineTextSplitterNode({ id,
           className="handle-orb-anchor !right-[-9px] !h-[18px] !w-[18px] !rounded-full !border-0 !bg-transparent !p-0"
           style={{ top: handleTopByIndex(index) }}
         >
-          <span className={`handle-orb handle-orb--source ${isConnecting ? 'is-connecting' : ''}`}>
+          <span className="handle-orb handle-orb--source">
             <span className="handle-orb__glow" />
             <span className="handle-orb__ring" />
             <span className="handle-orb__dot" />

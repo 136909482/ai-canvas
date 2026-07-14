@@ -1,5 +1,6 @@
 import { platformBridge } from '@/platform'
 import { writeWorkspaceImageAsset } from '@/features/imageAssets/runtime'
+import { buildProjectAssetPath } from '@/features/projectManager/projectAssetPaths'
 import type { WorkspaceImageAsset } from '@/types'
 import { useSettingsStore } from '@/store/useSettingsStore'
 
@@ -90,7 +91,13 @@ function buildCropBoundaries(segmentCount: number, cuts: number[]) {
   return [0, ...normalizeCropCuts(cuts, segmentCount), 1]
 }
 
-async function persistCropTile(blob: Blob, cropNodeId: string, row: number, column: number) {
+async function persistCropTile(
+  blob: Blob,
+  projectId: string | null,
+  cropNodeId: string,
+  row: number,
+  column: number,
+) {
   if (!useSettingsStore.getState().runtime.workspaceConfigured) {
     return {
       imageAsset: null,
@@ -99,7 +106,7 @@ async function persistCropTile(blob: Blob, cropNodeId: string, row: number, colu
   }
 
   const imageAsset = await writeWorkspaceImageAsset({
-    pathSegments: ['crops', cropNodeId],
+    pathSegments: buildProjectAssetPath(projectId, 'crops', cropNodeId),
     fileName: buildCropOutputFileName(row, column, blob),
     blob,
   })
@@ -152,6 +159,7 @@ export function normalizeCropCuts(cuts: unknown, segmentCount: number) {
 }
 
 export async function cropImageIntoTiles(input: {
+  projectId: string | null
   cropNodeId: string
   imageUrl: string
   rowCount: number
@@ -201,7 +209,7 @@ export async function cropImageIntoTiles(input: {
       )
 
       const blob = await canvasToBlob(canvas)
-      const persisted = await persistCropTile(blob, input.cropNodeId, row, column)
+      const persisted = await persistCropTile(blob, input.projectId, input.cropNodeId, row, column)
 
       results.push({
         row,

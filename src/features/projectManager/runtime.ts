@@ -37,10 +37,13 @@ export function takeWorkspaceSnapshot(): ProjectSnapshot {
   }))
 }
 
-export function replaceWorkspaceSnapshot(snapshot: ProjectSnapshot | PersistedProjectSnapshot) {
+export function replaceWorkspaceSnapshot(
+  snapshot: ProjectSnapshot | PersistedProjectSnapshot,
+  projectId?: string | null,
+) {
   const clonedSnapshot = cloneProjectSnapshot(snapshot)
   useCanvasStore.getState().replaceSnapshot(clonedSnapshot.canvas)
-  useTaskQueueStore.getState().replaceSnapshot(clonedSnapshot.taskQueue)
+  useTaskQueueStore.getState().replaceSnapshot(clonedSnapshot.taskQueue, projectId)
 }
 
 export function resetWorkspaceToEmpty() {

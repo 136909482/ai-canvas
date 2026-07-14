@@ -161,7 +161,7 @@ interface CanvasStore {
   updateNodeData: (id: string, patch: Record<string, unknown>) => void
   syncTextSplitterOutputs: (id: string) => void
   syncInlineTextSplitterParts: (id: string) => void
-  runImageCropNode: (id: string) => Promise<void>
+  runImageCropNode: (id: string, projectId: string | null) => Promise<void>
   updateGenerateNodeData: (id: string, patch: Partial<GenerateNodeData>) => void
   createGeneratedPreviewNode: (
     sourceGenerateNodeId: string,
@@ -915,7 +915,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     return outputNodeId
   },
 
-  runImageCropNode: async (id) => {
+  runImageCropNode: async (id, projectId) => {
     const cropNode = get().nodes.find((node) => node.id === id && node.type === 'imageCropNode')
     if (!cropNode) {
       return
@@ -982,6 +982,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       const horizontalCuts = normalizeCropCuts(cropNode.data?.horizontalCuts, rowCount)
       const verticalCuts = normalizeCropCuts(cropNode.data?.verticalCuts, columnCount)
       const previewResults = await cropImageIntoTiles({
+        projectId,
         cropNodeId: id,
         imageUrl: sourceImageUrl,
         rowCount,

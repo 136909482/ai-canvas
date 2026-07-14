@@ -1,7 +1,10 @@
 import { platformBridge } from '@/platform'
+import {
+  buildWorkspaceThumbnailPath,
+  getWorkspaceAssetPathParts,
+} from '@/features/projectManager/projectAssetPaths'
 import type { WorkspaceImageAsset } from '@/types'
 
-export const WORKSPACE_IMAGE_THUMBNAIL_PATH = ['thumbnails']
 export const WORKSPACE_IMAGE_THUMBNAIL_MAX_EDGE = 768
 
 type ImageDimensions = {
@@ -65,17 +68,6 @@ function buildThumbnailFileName(fileName: string) {
   const dotIndex = fileName.lastIndexOf('.')
   const baseName = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName
   return `${baseName || 'image'}-thumbnail.webp`
-}
-
-function getWorkspaceImageAssetPathParts(relativePath: string, fallbackFileName: string) {
-  const segments = relativePath.replace(/\\+/g, '/').split('/').filter(Boolean)
-  const fileName = segments.pop() || fallbackFileName
-  const pathSegments = segments[0] === 'images' ? segments.slice(1) : segments
-
-  return {
-    pathSegments,
-    fileName,
-  }
 }
 
 async function readBlobImageDimensions(blob: Blob): Promise<ImageDimensions> {
@@ -179,7 +171,7 @@ export async function writeWorkspaceImageThumbnailAsset(input: WorkspaceImageThu
   }
 
   const thumbnailAsset = await platformBridge.writeWorkspaceAsset({
-    pathSegments: [...WORKSPACE_IMAGE_THUMBNAIL_PATH, ...input.pathSegments],
+    pathSegments: buildWorkspaceThumbnailPath(input.pathSegments),
     fileName: buildThumbnailFileName(input.fileName),
     blob: thumbnail.blob,
   })
@@ -235,9 +227,9 @@ export async function restoreWorkspaceImageThumbnailAsset(input: RestoreWorkspac
     }
   }
 
-  const pathParts = getWorkspaceImageAssetPathParts(input.asset.relativePath, input.asset.fileName)
+  const pathParts = getWorkspaceAssetPathParts(input.asset.relativePath, input.asset.fileName)
   const thumbnailAsset = await platformBridge.writeWorkspaceAsset({
-    pathSegments: [...WORKSPACE_IMAGE_THUMBNAIL_PATH, ...pathParts.pathSegments],
+    pathSegments: buildWorkspaceThumbnailPath(pathParts.pathSegments),
     fileName: buildThumbnailFileName(pathParts.fileName),
     blob: thumbnail.blob,
   })

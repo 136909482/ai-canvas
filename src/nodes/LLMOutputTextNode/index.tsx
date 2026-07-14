@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useState } from 'react'
-import { Handle, Position, useConnection, type OnResizeEnd } from '@xyflow/react'
+import { Handle, Position, type OnResizeEnd } from '@xyflow/react'
 import { AlertTriangle, Bot, Braces, Check, CheckCircle2, Copy, Eye, Loader2, Pencil } from 'lucide-react'
 import { canEditLLMOutput, getLLMOutputModeLabel } from '@/features/llm/outputEditMode'
 import { StableNodeToolbar } from '@/components/StableNodeToolbar'
@@ -90,8 +90,6 @@ export const LLMOutputTextNode = memo(function LLMOutputTextNode({ id, data, sel
   const beginTransaction = useHistoryStore((s) => s.beginTransaction)
   const commitTransaction = useHistoryStore((s) => s.commitTransaction)
   const runTracked = useHistoryStore((s) => s.runTracked)
-  const connection = useConnection()
-  const isConnecting = connection.inProgress && connection.fromNode?.id === id
   const statusMeta = buildStatusMeta(data.status)
   const isGenerating = data.status === 'generating'
   const isError = data.status === 'error'
@@ -210,7 +208,7 @@ export const LLMOutputTextNode = memo(function LLMOutputTextNode({ id, data, sel
         id="output"
         className="handle-orb-anchor !w-[18px] !h-[18px] !rounded-full !border-0 !bg-transparent !p-0"
       >
-        <span className={`handle-orb handle-orb--source ${isConnecting ? 'is-connecting' : ''}`}>
+        <span className="handle-orb handle-orb--source">
           <span className="handle-orb__glow" />
           <span className="handle-orb__ring" />
           <span className="handle-orb__dot" />
